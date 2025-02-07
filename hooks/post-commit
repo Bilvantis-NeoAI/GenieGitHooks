@@ -1,0 +1,114 @@
+#!/bin/bash
+ 
+# Get commit details using Git commands
+commit_id=$(git rev-parse HEAD)
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+default_branch_commit=$(git rev-parse origin/"$default_branch")
+diff_content=$(git diff "$default_branch_commit" "$commit_id")
+commit_message=$(git log --format=%B -n 1 "$commit_id")
+branch=$(git rev-parse --abbrev-ref HEAD)
+username=$(git config user.name)
+repo_name=$(git config --get remote.origin.url | sed 's#.*/##;s/.git//')
+num_files_lines_changed=$(git diff --shortstat "$default_branch_commit" "$commit_id")
+files_changed=$(git diff --name-only "$default_branch_commit" "$commit_id")
+# Validate diff content
+if [[ -z "$diff_content" ]]; then
+   diff_content="No changes detected compared to the default branch ($default_branch)"
+fi
+if [[ -z "$commit_message" ]]; then
+   commit_message="No commit message provided"
+fi
+if [ -z "$files_changed" ]; then
+ files_changed="No files changed"
+fi
+ 
+if command -v python3 > /dev/null 2>&1; then
+    python_cmd="python3"
+elif command -v python > /dev/null 2>&1; then
+    python_cmd="python"
+else
+    exit 1
+fi
+ 
+# Function to escape special characters using Python
+escape_string() {
+   local input="$1"
+   echo "$input" | $python_cmd -c "import json, sys; print(json.dumps(sys.stdin.read()))"
+}
+ 
+# Escape special characters in variables
+escaped_commit_message=$(escape_string "$commit_message")
+escaped_diff_content=$(escape_string "$diff_content")
+escaped_num_files_lines_changed=$(escape_string "$num_files_lines_changed")
+escaped_files_changed=$(escape_string "$files_changed")
+ 
+# Prepare the JSON payload
+json_payload=$(cat <<EOF
+{
+   "diff_content": $escaped_diff_content,
+   "num_files_lines_changed": $escaped_num_files_lines_changed,
+   "commit_id": "$commit_id",
+   "default_branch_commit": "$default_branch_commit",
+   "username": "$username",
+   "reponame": "$repo_name",
+   "branch": "$branch",
+   "commit_message": $escaped_commit_message,
+   "files_changed": $escaped_files_changed,
+   "user_id": "${userId}"
+}
+EOF
+)
+ 
+# Use the BASE_API environment variable
+api_url="${BASE_API}/review/commit-review"
+
+
+# Save the JSON payload to a temporary file
+json_file=$(mktemp)
+echo "$json_payload" > "$json_file"
+ 
+ 
+# Send the JSON payload to the API from the temporary file
+response=$(curl -s -X POST -H "Content-Type: application/json" -d @"$json_file" "$api_url")
+ 
+# Clean up the temporary file
+rm "$json_file"
+ 
+# Check if the response is received
+if [[ -z "$response" ]]; then
+    echo "ERROR: An unexpected error occurred while communicating with the server. Please verify your internet connection or consider the possibility of an internal server issue." >&2
+    exit 1
+fi
+ 
+# Extract commit details using Python and string concatenation
+commit_quality=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data['review'].get('quality', ''))")
+commit_remarks=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data['review'].get('remarks', ''))")
+commit_severity=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data['review'].get('overallSeverity', ''))")
+ 
+# Print the results
+echo " "
+echo "**********************"
+echo "----------------------"
+echo "Commit Review Summary:"
+echo "----------------------"
+echo "Quality: $commit_quality"
+echo "Remarks: $commit_remarks"
+echo "Overall Severity: $commit_severity"
+ 
+# Display the issues in a structured format using string concatenation
+echo ""
+echo "Issues Identified:"
+echo "-------------------"
+ 
+# Iterate over issues and display each one using string concatenation
+echo "$response" | $python_cmd -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+for issue in data['review']['issues']:
+    print('Identification: ' + issue['identification'])
+    print('Explanation: ' + issue['explanation'])
+    print('Severity: ' + issue['severity'])
+    print('Suggested Fix: ' + issue['fix'])
+    print('-' * 20)
+"
+ 
