@@ -6,7 +6,8 @@ Genie GitHooks is a tool designed to streamline your Git workflow by automating 
 ## Installation Guide
 
 ### Prerequisites
-- **Windows**: Windows OS (64-bit)
+- **Python** Python 3.9 or later
+- **Windows**: Windows OS (64-bit) 
 - **Ubuntu**: Ubuntu 20.04 or later
 - Internet connection
 - Git installed on your system
@@ -52,28 +53,29 @@ Genie GitHooks is a tool designed to streamline your Git workflow by automating 
      ./app.bin
      ```
 
-### Configure Backend URL
-1. A popup will appear requesting the backend URL
-2. Enter: `https://genie.bilvantis.in/fastapi`
-3. Click the **Check URL** button
+4. **Configure Backend URL**
+    1. A popup will appear requesting the backend URL
+    2. Enter: `https://genie.bilvantis.in/fastapi`
+    3. Click the **Check URL** button
 
-### Verify Backend Connection
-- If the connection is successful, you will see a message:  
-  _"Backend is reachable. Proceeding to login."_
-- Click **OK**
+5. **Verify Backend Connection**
 
-### Login or Register
-- A login popup will appear
-- Enter your credentials
-- If you do not have an account, click **Register** and follow the steps to create one
+    If the connection is successful, you will see a message:  
+      _"Backend is reachable. Proceeding to login."_
+    - Click **OK**
+
+6. **Login or Register**
+  - A login popup will appear
+  - Enter your credentials
+  - If you do not have an account, click **Register** and follow the steps to create one
 
 ### Confirm Installation
-- After logging in, you will receive a confirmation message:  
-  _"Git hooks installed successfully."_
-- Click **OK** to finish the installation
+  - After logging in, you will receive a confirmation message:  
+    _"Git hooks installed successfully."_
+  - Click **OK** to finish the installation
 
 ## Uninstallation Guide
-To uninstall Genie GitHooks, follow steps 2–7 above. When the application detects an existing installation, a popup will appear stating:  
+To uninstall Genie GitHooks, follow steps 2–6 above. When the application detects an existing installation, a popup will appear stating:  
 _"Git hooks are already installed. Would you like to uninstall them?"_
 
 - Click **Yes** to proceed with the uninstallation
