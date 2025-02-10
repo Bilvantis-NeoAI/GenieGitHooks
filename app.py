@@ -368,7 +368,7 @@ class RegisterWindow(QWidget):
             response = requests.post(REGISTER_API, json=payload, headers=headers)
             data = response.json()
             
-            if response.status_code == 201:
+            if response.status_code == 200:
                 QMessageBox.information(self, "Success", "Registration successful! Please log in.")
                 self.login_window.show()
                 self.close()
