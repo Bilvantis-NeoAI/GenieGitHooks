@@ -19,9 +19,8 @@ if [[ -z "$commit_message" ]]; then
    commit_message="No commit message provided"
 fi
 if [ -z "$files_changed" ]; then
- files_changed="No files changed"
+files_changed="No files changed"
 fi
- 
 if command -v python3 > /dev/null 2>&1; then
     python_cmd="python3"
 elif command -v python > /dev/null 2>&1; then
@@ -29,19 +28,16 @@ elif command -v python > /dev/null 2>&1; then
 else
     exit 1
 fi
- 
 # Function to escape special characters using Python
 escape_string() {
    local input="$1"
    echo "$input" | $python_cmd -c "import json, sys; print(json.dumps(sys.stdin.read()))"
 }
- 
 # Escape special characters in variables
 escaped_commit_message=$(escape_string "$commit_message")
 escaped_diff_content=$(escape_string "$diff_content")
 escaped_num_files_lines_changed=$(escape_string "$num_files_lines_changed")
-escaped_files_changed=$(escape_string "$files_changed")
- 
+escaped_files_changed=$(echo "$files_changed" | $python_cmd -c "import sys, json; print(json.dumps(sys.stdin.read().splitlines()))")
 # Prepare the JSON payload
 json_payload=$(cat <<EOF
 {
@@ -58,57 +54,271 @@ json_payload=$(cat <<EOF
 }
 EOF
 )
- 
-# Use the BASE_API environment variable
-api_url="${BASE_API}/review/commit-review"
-
 
 # Save the JSON payload to a temporary file
 json_file=$(mktemp)
 echo "$json_payload" > "$json_file"
- 
- 
-# Send the JSON payload to the API from the temporary file
+# Use the BASE_API environment variable
+api_url="${BASE_API}/review/commit-review"
+# Use the JSON file in the curl request
 response=$(curl -s -X POST -H "Content-Type: application/json" -d @"$json_file" "$api_url")
- 
 # Clean up the temporary file
 rm "$json_file"
- 
 # Check if the response is received
 if [[ -z "$response" ]]; then
     echo "ERROR: An unexpected error occurred while communicating with the server. Please verify your internet connection or consider the possibility of an internal server issue." >&2
     exit 1
 fi
+
+# Extract commit review details
+commit_quality=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('quality', ''))")
+commit_remarks=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('remarks', ''))")
+commit_severity=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('overallSeverity', ''))")
+# Extract issues details using Python
+issues=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(json.dumps(data.get('issues', [])))")
  
-# Extract commit details using Python and string concatenation
-commit_quality=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data['review'].get('quality', ''))")
-commit_remarks=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data['review'].get('remarks', ''))")
-commit_severity=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data['review'].get('overallSeverity', ''))")
+# Prepare issue rows
+issue_rows=""
+index=1
+while IFS= read -r issue; do
+    identification=$(echo "$issue" | $python_cmd -c "import json, sys; from html import escape; print(escape(json.loads(sys.stdin.read())['identification']))")
+    explanation=$(echo "$issue" | $python_cmd -c "import json, sys; from html import escape; print(escape(json.loads(sys.stdin.read())['explanation']))")
+    severity=$(echo "$issue" | $python_cmd -c "import json, sys; print(json.loads(sys.stdin.read())['severity'])")
+    fix=$(echo "$issue" | $python_cmd -c "import json, sys; from html import escape; print(escape(json.loads(sys.stdin.read())['fix']))")
+    filename=$(echo "$issue" | $python_cmd -c "import json, sys; from html import escape; print(escape(json.loads(sys.stdin.read())['filename']))")
  
-# Print the results
-echo " "
-echo "**********************"
-echo "----------------------"
-echo "Commit Review Summary:"
-echo "----------------------"
-echo "Quality: $commit_quality"
-echo "Remarks: $commit_remarks"
-echo "Overall Severity: $commit_severity"
+    issue_rows+="<tr><td>$index</td><td>$identification</td><td>$explanation</td><td class='severity-$severity'>$severity</td><td>$fix</td><td>$filename</td></tr>"
+    ((index++))
+done < <(echo "$issues" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); [print(json.dumps(i)) for i in data]")
  
-# Display the issues in a structured format using string concatenation
-echo ""
-echo "Issues Identified:"
-echo "-------------------"
+# # Generate an HTML file
+html_file=$(mktemp --suffix=.html 2>/dev/null || mktemp -t commit_review.html)
+# Add timestamp to the file name
+timestamp=$(date +%s)
+html_file_with_timestamp="${html_file%.html}_$timestamp.html"
+cat > "$html_file_with_timestamp" <<EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commit Review</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.4/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.4/vfs_fonts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+<style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f2f0f0;
+            color: #333;
+            margin: 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        h2, h3 {
+            color: #07439C;
+        }
+        .header {
+            border-bottom: 1px solid #07439C;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+        }
+        .table-container {
+            overflow-x: auto; /* Add horizontal scroll for small screens */
+        }
+        table {
+            width: 100%;
+            max-width: 100%; /* Ensure table doesn't exceed container width */
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #07439C;
+            color: white;
+        }
+        /* Add specific styling for the Remarks column */
+        th.remarks, td.remarks {
+            width: 800px; /* Adjust the width as needed */
+            white-space: nowrap; /* Prevent text wrapping */
+            overflow: hidden; /* Ensure content doesn't overflow */
+            text-overflow: ellipsis; /* Add ellipsis if text overflows */
+        }
+        td.identification {
+            max-width: 300px; /* Set a maximum width for the column */
+            overflow-x: auto; /* Enable horizontal scrolling */
+            white-space: nowrap; /* Prevent wrapping */
+            scrollbar-color: white lightgray; /* Thumb color and track color */
+            scrollbar-width: thin; /* Makes the scrollbar thinner */
+        }
+        td.pre-formatted {
+            max-width: 100px;
+            word-wrap: break-word;
+        }
+        td.explanation, td.fix,td.filename{ {
+            max-width: 100px;
+            word-wrap: break-word;
+        }
+        .severity-critical {
+            color: red;
+        }
+        .severity-minor {
+            color: orange;
+        }
+        .severity-major {
+            color: red;
+        }
+        .severity-cosmetic {
+            color: blue;
+        }
+        button.download-btn {
+            padding: 5px 10px;
+            background-color: #07439C !important;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button.download-btn:hover {
+            background-color: #035f99 !important;
+        }
+</style>
+</head>
+<body>
+<div class="header">
+        <h2>Commit Review</h2>      
+    </div>  
+<div id="content">  
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div>
+                <h3>Summary:</h3>
+            </div>
+            <div>
+                <button id="downloadButton" class="download-btn">Download as PDF</button>              
+            </div>          
+        </div>      
+<table>
+    <tr>
+        <th>Quality</th>
+        <th>Remarks</th>
+        <th>Overall Severity</th>
+    </tr>
+    <tr>
+        <td>$commit_quality</td>
+        <td>$commit_remarks</td>
+        <td>$commit_severity</td>
+    </tr>
+</table>
+<div id="content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div>
+                <h3>Issues Identified:</h3>
+            </div>        
+</div>
+<table>
+    <tr>
+        <th>S.No</th>
+        <th>Identification</th>
+        <th>Explanation</th>
+        <th>Severity</th>
+        <th>Suggested Fix</th>
+        <th>Files Changed</th>
+    </tr>
+    $issue_rows
+</table>
+</div>
+<script>
+    document.getElementById("downloadButton").addEventListener("click", () => {
+        const currentDate = new Date();
+        const formattedDate = currentDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        .replace(' ', '_')
+        .replace(',', ''); // Convert "06 Feb 2025" to "06_Feb_2025"
+        const fileName = 'commit_review_' + formattedDate + '.pdf';
+        const issues = $issues;
+        const docDefinition = {
+            pageOrientation: 'landscape',
+            content: [
+                { text: 'Commit Review', style: 'header' },
+                { text: 'Summary:', style: 'subheader' },
+                {
+                    table: {
+                        widths: ['25%', '50%', '25%'],
+                        body: [
+                            [{ text: 'Quality',fillColor: '#E9E5E5', bold: true ,alignment: 'center'}, { text: 'Remarks', fillColor: '#E9E5E5',bold: true,alignment: 'center' }, { text: 'Overall Severity',fillColor: '#E9E5E5', bold: true,alignment: 'center' }],
+                            [
+                                { text: '$commit_quality', alignment: 'center' },
+                                { text: '$commit_remarks', alignment: 'center' },
+                                { text: '$commit_severity', alignment: 'center' }
+                            ]
+                        ]
+                    }
+                },
+                { text: 'Issues Identified:', style: 'subheader' },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['5%', '20%', '30%', '10%', '25%', '10%'],
+                        body: [
+                            [
+                                { text: 'S.No',fillColor: '#E9E5E5', bold: true ,alignment: 'center'},
+                                { text: 'Issue',fillColor: '#E9E5E5', bold: true ,alignment: 'center'},
+                                { text: 'Explanation',fillColor: '#E9E5E5', bold: true ,alignment: 'center' },
+                                { text: 'Severity',fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Suggested Fix',fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Files Changed',fillColor: '#E9E5E5', bold: true, alignment: 'center' }
+                            ],
+                            ...issues.map((issue, index) => [
+                                { text: index + 1, fontSize: 10, alignment: 'center' },
+                                { text: issue.identification, fontSize: 10 },
+                                { text: issue.explanation, fontSize: 10 },
+                                { text: issue.severity, fontSize: 10, alignment: 'center' },
+                                { text: issue.fix, fontSize: 10 },
+                                { text: issue.filename, fontSize: 10 }
+                            ])
+                        ]
+                    }
+                }
+            ],
+            styles: {
+                header: {
+                    fontSize: 18,
+                    bold: true,
+                    alignment: 'center',
+                    margin: [0, 0, 0, 10]
+                },
+                subheader: {
+                    fontSize: 14,
+                    bold: true,
+                    margin: [0, 10, 0, 5]
+                }
+            }
+        };
  
-# Iterate over issues and display each one using string concatenation
-echo "$response" | $python_cmd -c "
-import json, sys
-data = json.loads(sys.stdin.read())
-for issue in data['review']['issues']:
-    print('Identification: ' + issue['identification'])
-    print('Explanation: ' + issue['explanation'])
-    print('Severity: ' + issue['severity'])
-    print('Suggested Fix: ' + issue['fix'])
-    print('-' * 20)
-"
- 
+        pdfMake.createPdf(docDefinition).download(fileName);
+    });
+</script>
+</body>
+</html>
+EOF
+# Open the HTML file in the default browser and bring it to the foreground
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    xdg-open "$html_file_with_timestamp"
+    sleep 1  
+    wmctrl -a "$(basename "$html_file")" 2>/dev/null || echo "Switch manually."
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    open "$html_file_with_timestamp"
+    sleep 1  
+    osascript -e 'tell application "Google Chrome" to activate' 2>/dev/null ||     osascript -e 'tell application "Safari" to activate' 2>/dev/null ||     echo "Switch manually."
+elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    start "" "$html_file_with_timestamp"
+    sleep 1  
+    powershell -Command "(New-Object -ComObject WScript.Shell).AppActivate('chrome')"
+else
+    echo "Unsupported OS. Open the file manually: $html_file"
+fi  
+        
