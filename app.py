@@ -194,7 +194,7 @@ class LoginWindow(QWidget):
  
             # Replace BASE_URL dynamically in the shell script (if exists)
             if os.path.exists(pre_commit_source):
-                with open(pre_commit_source, "r") as file:
+                with open(pre_commit_source, "r", encoding="utf-8") as file:
                     pre_commit_content = file.read()
                 with open(post_commit_source, "r") as file:
                     post_commit_content = file.read()
@@ -232,8 +232,8 @@ class LoginWindow(QWidget):
  
     def uninstall_hooks(self, hooks_dir):
         try:
-            os.remove(os.path.join(hooks_dir, "pre-commit"))
-            os.remove(os.path.join(hooks_dir, "post-commit"))
+            if os.path.exists(hooks_dir):  # Check if the file exists
+                shutil.rmtree(hooks_dir)
             subprocess.run(['git', 'config', '--global','--unset','core.hooksPath'], check=True)
             QMessageBox.information(self, "Success", "Git hooks uninstalled successfully!")
             logging.info("Git hooks uninstalled successfully!")
@@ -258,7 +258,7 @@ class LoginWindow(QWidget):
             return None
  
         # Define the default hooks path
-        default_hooks_path = os.path.expanduser("~/.git_hooks")
+        default_hooks_path = os.path.expanduser("~\git_hooks")
  
         # Ask user if they want to set the global Git hooks path
         reply = QMessageBox.question(self, "Set Global Git Hooks",
