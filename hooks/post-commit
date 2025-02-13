@@ -1,5 +1,4 @@
 #!/bin/bash
- 
 # Check Python availability
 if command -v python3 > /dev/null 2>&1; then
    python_cmd="python3"
@@ -9,12 +8,10 @@ else
    echo "WARNING: Python3 is not installed. Commit review functionality will not work."
    exit 1
 fi
- 
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
- 
 # Function to display a Tkinter message box
 show_message_box() {
     local message="$1"
@@ -26,7 +23,6 @@ root.withdraw()
 messagebox.showinfo("Genie GitHooks", '$message')
 EOF
 }
- 
 # Function to get user confirmation via Tkinter
 get_user_confirmation() {
     local prompt="$1"
@@ -39,13 +35,11 @@ response = messagebox.askyesno("Genie GitHooks", "$prompt")
 print("Y" if response else "N")
 EOF
 }
- 
 # Check if Git is installed
 if ! command_exists git; then
     show_message_box " Error: Git is not installed. Please install Git before proceeding."
     exit 1
 fi
- 
 # Check if Git global username and email are set
 GIT_USERNAME=$(git config --global user.name)
 GIT_EMAIL=$(git config --global user.email)
@@ -54,7 +48,6 @@ if [ -z "$GIT_USERNAME" ] || [ -z "$GIT_EMAIL" ]; then
     show_message_box ' Error: Git global username and/or email is not set.\nPlease configure them using: \n git config --global user.name "Your Name" \n git config --global user.email  "you@example.com"'
     exit 1
 fi
- 
 # Get commit details using Git commands
 commit_id=$(git rev-parse HEAD)
 default_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
@@ -105,16 +98,15 @@ json_payload=$(cat <<EOF
    "branch": "$branch",
    "commit_message": $escaped_commit_message,
    "files_changed": $escaped_files_changed,
-   "user_id": "${userId}"
+   "user_id": "67498e2eb96484d566d74a46"
 }
 EOF
 )
-
 # Save the JSON payload to a temporary file
 json_file=$(mktemp)
 echo "$json_payload" > "$json_file"
 # Use the BASE_API environment variable
-api_url="${BASE_API}/review/commit-review"
+api_url="http://34.46.36.105:3000/genieapi/review/commit-review"
 # Use the JSON file in the curl request
 response=$(curl -s -X POST -H "Content-Type: application/json" -d @"$json_file" "$api_url")
 # Clean up the temporary file
@@ -124,7 +116,6 @@ if [[ -z "$response" ]]; then
     echo "ERROR: An unexpected error occurred while communicating with the server. Please verify your internet connection or consider the possibility of an internal server issue." >&2
     exit 1
 fi
-
 # Extract commit review details
 commit_quality=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('quality', ''))")
 commit_remarks=$(echo "$response" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('remarks', ''))")
@@ -285,32 +276,22 @@ cat > "$html_file_with_timestamp" <<EOF
 </div>
 <script>
     document.getElementById("downloadButton").addEventListener("click", () => {
-alert("Your PDF is being downloaded..11. " + document.querySelectorAll("table:nth-of-type(2) tr:not(:first-child)"));
-const rows = document.querySelectorAll("table:nth-of-type(2) tr:not(:first-child)");
-const rows = document.querySelectorAll("table:nth-of-type(2) tr:not(:first-child)");
- 
-const rowsArray = Array.from(rows).map(row => {
-    const text = row.innerText.trim();
-    alert(row);  // Show alert inside map
-    return text;  // Ensure map returns the value
-});
- 
- 
         const commit_quality = document.querySelector("td:nth-child(1)").innerText;
         const commit_remarks = document.querySelector("td:nth-child(2)").innerText;
         const commit_severity = document.querySelector("td:nth-child(3)").innerText;
-        const issueRows = document.querySelectorAll("table:nth-of-type(2) tr:not(:first-child)");
-        const issues = Array.from(issueRows).map(row => {
+        const issueTable = document.querySelectorAll("table")[1];
+        const issueRows = issueTable.querySelectorAll("tr:not(:first-child)");
+        const issues = Array.from(issueRows).map((row, index) => {
             const cells = row.querySelectorAll("td");
             return {
                 identification: cells[1]?.innerText || "",
                 explanation: cells[2]?.innerText || "",
                 severity: cells[3]?.innerText || "",
                 fix: cells[4]?.innerText || "",
-                filename: cells[5]?.innerText || ""
+                filename: cells[5]?.innerText || "",
+                index: index + 1
             };
         });
- 
         const currentDate = new Date();
         const formattedDate = currentDate.toLocaleDateString('en-GB', {
             day: '2-digit', month: 'short', year: 'numeric'
