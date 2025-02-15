@@ -98,7 +98,7 @@ json_payload=$(cat <<EOF
    "branch": "$branch",
    "commit_message": $escaped_commit_message,
    "files_changed": $escaped_files_changed,
-   "user_id": "67498e2eb96484d566d74a46"
+   "user_id": "${userId}"
 }
 EOF
 )
@@ -106,7 +106,7 @@ EOF
 json_file=$(mktemp)
 echo "$json_payload" > "$json_file"
 # Use the BASE_API environment variable
-api_url="http://34.46.36.105:3000/genieapi/review/commit-review"
+api_url="${BASE_API}/review/commit-review"
 # Use the JSON file in the curl request
 response=$(curl -s -X POST -H "Content-Type: application/json" -d @"$json_file" "$api_url")
 # Clean up the temporary file
