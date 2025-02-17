@@ -54,14 +54,30 @@ if [ -z "$GIT_USERNAME" ] || [ -z "$GIT_EMAIL" ]; then
     show_message_box ' Error: Git global username and/or email is not set.\nPlease configure them using: \n git config --global user.name "Your Name" \n git config --global user.email  "you@example.com"'
     exit 1
 fi
- 
+
+# Get the commit message from the command line arguments
+commit_message=$(git rev-parse --verify HEAD >/dev/null 2>&1 && git log -1 --pretty=%B || echo "")
+
+# Check if the commit message is empty
+if [[ -z "$commit_message" ]]; then
+    show_message_box "Please add a commit message before committing."
+    exit 1
+fi
+
 # Get staged files
-staged_files=$(git diff --cached --name-only)
-diff_content=$(git diff --cached)
+staged_files=$(git diff --staged --diff-filter=AM --name-only)
+diff_content=$(git diff --diff-filter=AM --cached)
 repo_name=$(git config --get remote.origin.url | sed 's#.*/##;s/.git//')
- 
-if [[ -z "$staged_files" ]]; then
+deleted_files=$(git diff --staged --diff-filter=D --name-only)
+
+# If there are no added/modified/deleted files, show the message and exit
+if [[ -z "$staged_files" && -z "$deleted_files" ]]; then
     show_message_box "No files staged for commit."
+    exit 0
+fi
+
+# If there are only deletions, do nothing (skip the message)
+if [[ -z "$staged_files" && -n "$deleted_files" ]]; then
     exit 0
 fi
  
