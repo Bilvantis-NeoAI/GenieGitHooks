@@ -105,7 +105,7 @@ secrets = [
     '\\n'.join([
         '-' * 30,
         f'File: {item[\"filename\"]}',
-        f'Pattern: {item[\"pattern\"]}',
+        f'Pattern: Potential Secret',
         f'Content: {item[\"line_content\"]}'
     ])
     for item in data.get('list_secrets_found', [])
