@@ -1,5 +1,4 @@
 #!/bin/bash
- 
 # Check Python availability
 if command -v python3 > /dev/null 2>&1; then
    python_cmd="python3"
@@ -9,12 +8,10 @@ else
    echo "WARNING: Python3 is not installed. Commit review functionality will not work."
    exit 1
 fi
- 
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
- 
 # Function to display a Tkinter message box
 show_message_box() {
     local message="$1"
@@ -26,7 +23,6 @@ root.withdraw()
 messagebox.showinfo("Genie GitHooks", '$message')
 EOF
 }
- 
 # Function to get user confirmation via Tkinter
 get_user_confirmation() {
     local prompt="$1"
@@ -39,13 +35,11 @@ response = messagebox.askyesno("Genie GitHooks", "$prompt")
 print("Y" if response else "N")
 EOF
 }
- 
 # Check if Git is installed
 if ! command_exists git; then
     show_message_box " Error: Git is not installed. Please install Git before proceeding."
     exit 1
 fi
- 
 # Check if Git global username and email are set
 GIT_USERNAME=$(git config --global user.name)
 GIT_EMAIL=$(git config --global user.email)
@@ -54,37 +48,18 @@ if [ -z "$GIT_USERNAME" ] || [ -z "$GIT_EMAIL" ]; then
     show_message_box ' Error: Git global username and/or email is not set.\nPlease configure them using: \n git config --global user.name "Your Name" \n git config --global user.email  "you@example.com"'
     exit 1
 fi
-
-# Get the commit message from the command line arguments
-commit_message=$(git rev-parse --verify HEAD >/dev/null 2>&1 && git log -1 --pretty=%B || echo "")
-
-# Check if the commit message is empty
-if [[ -z "$commit_message" ]]; then
-    show_message_box "Please add a commit message before committing."
-    exit 1
-fi
-
 # Get staged files
-staged_files=$(git diff --staged --diff-filter=AM --name-only)
-diff_content=$(git diff --diff-filter=AM --cached)
+staged_files=$(git diff --cached --name-only)
+diff_content=$(git diff --cached)
 repo_name=$(git config --get remote.origin.url | sed 's#.*/##;s/.git//')
-deleted_files=$(git diff --staged --diff-filter=D --name-only)
-
-# If there are no added/modified/deleted files, show the message and exit
-if [[ -z "$staged_files" && -z "$deleted_files" ]]; then
+ 
+if [[ -z "$staged_files" ]]; then
     show_message_box "No files staged for commit."
     exit 0
 fi
-
-# If there are only deletions, do nothing (skip the message)
-if [[ -z "$staged_files" && -n "$deleted_files" ]]; then
-    exit 0
-fi
- 
 # Convert staged files to JSON
 staged_files_json=$(printf '%s\n' "$staged_files" | sed 's/^/"/; s/$/"/' | paste -sd, - | sed 's/^/[/' | sed 's/$/]/')
 escaped_diff_content=$(printf '%s' "$diff_content" | $python_cmd -c "import json, sys; print(json.dumps(sys.stdin.read()))")
- 
 # Prepare JSON payload
 json_payload=$(cat <<EOF
 {
@@ -94,8 +69,7 @@ json_payload=$(cat <<EOF
     "user_id": "${userId}"
 }
 EOF
-)
- 
+) 
 api_url="${BASE_API}/review/commit-scan"
 json_file=$(mktemp)
 echo "$json_payload" > "$json_file"
@@ -107,16 +81,13 @@ if [ -z "$response" ] || [[ "$response" == *'"detail":"Not Found"'* ]]; then
     show_message_box "ERROR: Unable to communicate with the server. Check internet connection or server status."
     exit 1
 fi
- 
 # Parse API response
 has_secrets=$($python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('has_secrets', 'false'))" <<< "$response")
 has_disallowed_files=$($python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('has_disallowed_files', 'false'))" <<< "$response")
 files_disallowed=$($python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(', '.join(data.get('files_disallowed', [])))" <<< "$response")
 list_secrets_found=$($python_cmd -c "
 import json, sys
- 
 data = json.loads(sys.stdin.read())
- 
 secrets = [
     '\\n'.join([
         '-' * 30,
@@ -126,14 +97,28 @@ secrets = [
     ])
     for item in data.get('list_secrets_found', [])
 ]
- 
 print('\\n'.join(secrets))
 " <<< "$response")
- 
+secrets_list_json=$($python_cmd -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+secrets = [
+    {
+        'filename': item['filename'],
+        'content': item['line_content']
+    }
+    for item in data.get('list_secrets_found', [])
+]
+print(json.dumps(secrets))  # Ensure proper JSON format
+" <<< "$response")
+files_disallowed_json=$($python_cmd -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+print(json.dumps(data.get('files_disallowed', [])))  # Properly formatted JSON list
+" <<< "$response")
 # Convert the boolean values to lowercase for consistent comparison
 has_secrets=$(echo "$has_secrets" | tr '[:upper:]' '[:lower:]')
 has_disallowed_files=$(echo "$has_disallowed_files" | tr '[:upper:]' '[:lower:]')
- 
 # Handle disallowed files
 if [[ "$has_disallowed_files" == "true" ]]; then
     user_input=$(get_user_confirmation "Disallowed files detected: \n$files_disallowed\nDo you want to proceed?")
@@ -142,7 +127,6 @@ if [[ "$has_disallowed_files" == "true" ]]; then
         exit 1
     fi
 fi
- 
 # Handle secrets detection
 if [[ "$has_secrets" == "true" ]]; then
     escaped_secrets=$(echo "$list_secrets_found" | sed ':a;N;$!ba;s/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g')
@@ -151,8 +135,18 @@ if [[ "$has_secrets" == "true" ]]; then
         show_message_box "Commit aborted by user."
         exit 1
     fi
-fi
- 
+fi 
+# Define metadata file
+metadata_file=".commit_metadata.json"
+commit_metadata=$(cat <<EOF
+{
+    "has_secrets": $has_secrets,
+    "secrets_found": $secrets_list_json,
+    "has_disallowed_files": $has_disallowed_files,
+    "disallowed_files": $files_disallowed_json
+}
+EOF
+) 
+# Save metadata to a file for use in post-commit
+echo "$commit_metadata" > "$metadata_file"
 exit 0
- 
- 

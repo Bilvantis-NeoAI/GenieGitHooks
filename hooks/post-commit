@@ -48,11 +48,25 @@ if [ -z "$GIT_USERNAME" ] || [ -z "$GIT_EMAIL" ]; then
     show_message_box ' Error: Git global username and/or email is not set.\nPlease configure them using: \n git config --global user.name "Your Name" \n git config --global user.email  "you@example.com"'
     exit 1
 fi
+# Define metadata file
+metadata_file=".commit_metadata.json"
+# Check if metadata file exists
+if [[ -f "$metadata_file" ]]; then
+    echo "Commit is in progress..."
+    
+    # Read metadata
+    commit_metadata=$(cat "$metadata_file")
+
+    # Optionally, clean up the file after processing
+    rm "$metadata_file"
+else
+    echo "No commit metadata found."
+fi
 # Get commit details using Git commands
 commit_id=$(git rev-parse HEAD)
 default_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
 default_branch_commit=$(git rev-parse origin/"$default_branch")
-diff_content=$(git diff "$default_branch_commit" "$commit_id")
+diff_content=$(git diff --diff-filter=AM "$default_branch_commit" "$commit_id")
 commit_message=$(git log --format=%B -n 1 "$commit_id")
 branch=$(git rev-parse --abbrev-ref HEAD)
 username=$(git config user.name)
@@ -131,9 +145,69 @@ while IFS= read -r issue; do
     severity=$(echo "$issue" | $python_cmd -c "import json, sys; print(json.loads(sys.stdin.read())['severity'])")
     fix=$(echo "$issue" | $python_cmd -c "import json, sys; from html import escape; print(escape(json.loads(sys.stdin.read())['fix']))")
     filename=$(echo "$issue" | $python_cmd -c "import json, sys; from html import escape; print(escape(json.loads(sys.stdin.read())['filename']))")
-    issue_rows+="<tr><td>$index</td><td>$identification</td><td>$explanation</td><td class='severity-$severity'>$severity</td><td>$fix</td><td>$filename</td></tr>"
+    issue_rows+="<tr><td class='sno'>$index</td><td class='identification'><pre>$identification</pre></td><td class='explanation'>$explanation</td><td class='severity-$severity'>$severity</td><td class='fix'><pre>$fix</pre></td><td class='files-changed';>$filename</td></tr>"
     ((index++))
 done < <(echo "$issues" | $python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); [print(json.dumps(i)) for i in data]")
+
+# Conditionally build Secrets and Disallowed Files sections
+secrets_table_html=""
+disallowed_files_html=""
+
+if [[ -n "$commit_metadata" ]]; then
+    # Check if secrets are enabled/true in metadata
+    has_secrets=$(echo "$commit_metadata" | $python_cmd -c "import json, sys; data=json.load(sys.stdin); print(data.get('has_secrets', False))")
+    if [[ "$has_secrets" == "True" || "$has_secrets" == "true" ]]; then
+         secrets_table_rows=$(echo "$commit_metadata" | $python_cmd -c "import json, sys
+data = json.load(sys.stdin)
+secrets = data.get('secrets_found', [])
+rows = []
+for i, secret in enumerate(secrets, start=1):
+    filename = secret.get('filename','')
+    secret_content = secret.get('content','')
+    rows.append(f'<tr><td class="sno">{i}</td><td class="filename">{filename}</td><td class="secret">{secret_content}</td></tr>')
+print(''.join(rows))")
+         if [[ -n "$secrets_table_rows" ]]; then
+             secrets_table_html=$(cat <<EOF
+    <div id="potentialSecretsFound">
+        <h3>Potential Secrets Found:</h3>
+        <table id="secretsTable">
+            <tr>
+                <th class="sno">S.No</th>
+				<th class="filename">Filename</th>
+				<th class="secret">Secret</th>
+            </tr>
+            $secrets_table_rows
+        </table>
+    </div>
+EOF
+)
+         fi
+    fi
+
+    # Check if disallowed files exist in metadata
+    has_disallowed=$(echo "$commit_metadata" | $python_cmd -c "import json, sys; data=json.load(sys.stdin); print(data.get('has_disallowed_files', False))")
+    if [[ "$has_disallowed" == "True" || "$has_disallowed" == "true" ]]; then
+         disallowed_files_str=$(echo "$commit_metadata" | $python_cmd -c "import json, sys
+data = json.load(sys.stdin)
+files = data.get('disallowed_files', [])
+print(', '.join(files))")
+         if [[ -n "$disallowed_files_str" ]]; then
+             disallowed_files_html=$(cat <<EOF
+    <div id="disallowedFilesFound">
+        <h3>Disallowed Files Found:</h3>
+        <table id="disallowedFilesTable">
+            <tr>
+                <td class="disallowed-files-str">$disallowed_files_str</td>
+            </tr>
+        </table>
+    </div>
+EOF
+)
+         fi
+    fi
+fi
+
+
 # Generate an HTML file
 html_file=$(mktemp --suffix=.html 2>/dev/null || mktemp -t commit_review.html)
 # Add timestamp to the file name
@@ -168,44 +242,133 @@ cat > "$html_file_with_timestamp" <<EOF
             padding-bottom: 5px;
         }
         .table-container {
-            overflow-x: auto;
+		    width: 100vw;
+            overflow-x: hidden;
         }
         table {
             width: 100%;
-            max-width: 100%;
+            max-width: 100vw;
+			table-layout: fixed; 
             border-collapse: collapse;
             margin: 10px 0;
         }
-        th, td {
-            text-align: left;
+        td {
             padding: 8px;
             border: 1px solid #ddd;
+			overflow-x: auto;
+			font-size: 13px;
         }
         th {
             background-color: #07439C;
             color: white;
-        }
-        th.remarks, td.remarks {
-            width: 800px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        td.identification {
-            max-width: 300px;
-            overflow-x: auto;
-            white-space: nowrap;
-            scrollbar-color: white lightgray;
-            scrollbar-width: thin;
-        }
-        td.pre-formatted {
-            max-width: 100px;
-            word-wrap: break-word;
-        }
-        td.explanation, td.fix,td.filename{
-            max-width: 100px;
-            word-wrap: break-word;
-        }
+			padding: 8px;
+            border: 1px solid #ddd;
+			overflow-x: auto;
+        } 			
+		th.sno { 
+		    width: 3%; 
+			min-width: 50px; 
+		}
+		td.sno {
+		    text-align: center; 
+		}
+        th.filename {
+		    width: 20%; 
+			min-width: 200px; 
+			word-break: break-word; 
+		}
+		td.filename {
+		   text-align: center; 
+		   overflow-x: auto;
+		}
+		th.secret{ 
+		    width: 60%; 
+			min-width: 400px; 
+			word-break: break-word; 
+		}	
+        td.secret{
+            word-break: break-word; 
+			white-space: pre-wrap; 
+			text-align: left;
+        }			
+		th.disallowed-files {
+     		width: 20%; 
+			min-width: 500px; 
+			word-break: break-word; 
+			white-space: pre-wrap; 
+		}
+		td.disallowed-files-str {
+		    word-break: break-word; 
+			white-space: pre-wrap; 
+			text-align: left; 
+			}
+		th.quality { 
+		    width: 15%; 
+			min-width: 150px; 
+			word-break: break-word;
+            text-align: center;			
+		}
+		td.quality {
+            text-align: center;	
+			vertical-align: top;
+		}
+		th.remarks { 
+		    width: 70%; 
+			min-width: 300px; 
+		}
+		td.remarks {
+		    word-break: break-word; 
+			white-space: pre-wrap; 
+			text-align: left;
+        }			
+		th.overall-severity { 
+		    width: 15%; 
+			min-width: 150px; 
+			text-align: center; 
+		}
+		td.overall-severity {
+		    text-align: center;	
+			vertical-align: top;
+		}
+		th.identification { 
+		    width: 22%; 
+			min-width: 150px; 
+			white-space: pre-wrap;
+		}
+		td.identification {
+		    text-align: left;
+			overflow-x: auto;
+			font-family: 'Poppins', sans-serif;
+		}
+		th.explanation, td.explanation { 
+		    width: 30%; 
+			min-width: 250px; 
+			word-break: break-word; 
+			white-space: pre-wrap; }
+		th.severity{ 
+		    width: 13%; 
+			min-width: 80px; 
+			text-align: center; 
+		}
+		td[class^="severity-"] {
+			text-align: center;
+		}
+		th.fix{ 
+		    width: 20%; min-width: 200px; white-space: pre-wrap; 
+		}
+		td.fix {
+		    text-align: left;
+			overflow-x: auto;
+			font-family: 'Poppins', sans-serif;
+		}
+		th.files-changed { 
+		    width: 12%; 
+			min-width: 150px; 
+			word-break: break-word; 
+		}
+		td.files-changed {
+		    text-align: center; 
+		}
         .severity-critical {
             color: red;
         }
@@ -233,27 +396,33 @@ cat > "$html_file_with_timestamp" <<EOF
 </head>
 <body>
 <div class="header">
-        <h2>Commit Review</h2>      
-    </div>  
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+	  <div>
+        <h2>Commit Review</h2> 
+	  </div>
+	  <div>
+		<button id="downloadButton" class="download-btn">Download as PDF</button>              
+	  </div>  		
+    </div> 
+</div>	
 <div id="content">  
+        $secrets_table_html
+        $disallowed_files_html
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <div>
                 <h3>Summary:</h3>
-            </div>
-            <div>
-                <button id="downloadButton" class="download-btn">Download as PDF</button>              
-            </div>          
+            </div>        
         </div>      
-<table>
+<table id="summaryTable">
     <tr>
-        <th>Quality</th>
-        <th>Remarks</th>
-        <th>Overall Severity</th>
+        <th class="quality">Quality</th>
+        <th class="remarks">Remarks</th>
+        <th class="overall-severity">Overall Severity</th>
     </tr>
     <tr>
-        <td>$commit_quality</td>
+        <td class="quality">$commit_quality</td>
         <td>$commit_remarks</td>
-        <td>$commit_severity</td>
+        <td class="overall-severity">$commit_severity</td>
     </tr>
 </table>
 <div id="content">
@@ -262,101 +431,189 @@ cat > "$html_file_with_timestamp" <<EOF
                 <h3>Issues Identified:</h3>
             </div>        
 </div>
-<table>
+<table id="issuesTable">
     <tr>
-        <th>S.No</th>
-        <th>Identification</th>
-        <th>Explanation</th>
-        <th>Severity</th>
-        <th>Suggested Fix</th>
-        <th>Files Changed</th>
+        <th class="sno">S.No</th>
+        <th class="identification">Identification</th>
+        <th class="explanation">Explanation</th>
+        <th class="severity">Severity</th>
+        <th class="fix">Suggested Fix</th>
+        <th class="files-changed">Files Changed</th>
     </tr>
     $issue_rows
 </table>
-</div>
 <script>
-    document.getElementById("downloadButton").addEventListener("click", () => {
-        const commit_quality = document.querySelector("td:nth-child(1)").innerText;
-        const commit_remarks = document.querySelector("td:nth-child(2)").innerText;
-        const commit_severity = document.querySelector("td:nth-child(3)").innerText;
-        const issueTable = document.querySelectorAll("table")[1];
-        const issueRows = issueTable.querySelectorAll("tr:not(:first-child)");
-        const issues = Array.from(issueRows).map((row, index) => {
+document.getElementById("downloadButton").addEventListener("click", () => {
+    // Get summary table data by ID
+    const summaryTable = document.getElementById("summaryTable");
+    if (!summaryTable) {
+        return;
+    }
+    const summaryRow = summaryTable.querySelector("tr:nth-child(2)");
+    const summaryCells = summaryRow.querySelectorAll("td");
+    const summaryData = {
+         quality: summaryCells[0]?.innerText || "",
+         remarks: summaryCells[1]?.innerText || "",
+         severity: summaryCells[2]?.innerText || ""
+    };
+    // Get issues table data by ID
+    const issuesTable = document.getElementById("issuesTable");
+    if (!issuesTable) {
+        return;
+    }
+    const issueRows = issuesTable.querySelectorAll("tr:not(:first-child)");
+    const issues = Array.from(issueRows).map((row, index) => {
+        const cells = row.querySelectorAll("td");
+        return {
+            identification: cells[1]?.innerText || "",
+            explanation: cells[2]?.innerText || "",
+            severity: cells[3]?.innerText || "",
+            fix: cells[4]?.innerText || "",
+            filename: cells[5]?.innerText || "",
+            index: index + 1
+        };
+    });
+    // Optionally get secrets table data if it exists
+    let secretsContent = "";
+    const secretsTable = document.getElementById("secretsTable");
+    if (secretsTable) {
+        const secretRows = secretsTable.querySelectorAll("tr:not(:first-child)");
+        secretsContent = Array.from(secretRows).map((row, index) => {
             const cells = row.querySelectorAll("td");
             return {
-                identification: cells[1]?.innerText || "",
-                explanation: cells[2]?.innerText || "",
-                severity: cells[3]?.innerText || "",
-                fix: cells[4]?.innerText || "",
-                filename: cells[5]?.innerText || "",
-                index: index + 1
+                sno: cells[0]?.innerText || "",
+                filename: cells[1]?.innerText || "",
+                secret: cells[2]?.innerText || ""
             };
         });
-        const currentDate = new Date();
-        const formattedDate = currentDate.toLocaleDateString('en-GB', {
-            day: '2-digit', month: 'short', year: 'numeric'
-        }).replace(' ', '_').replace(',', '');
-        const fileName = 'commit_review_' + formattedDate + '.pdf';
-        const docDefinition = {
-            pageOrientation: 'landscape',
-            content: [
-                { text: 'Commit Review', style: 'header' },
-                { text: 'Summary:', style: 'subheader' },
-                {
-                    table: {
-                        widths: ['25%', '50%', '25%'],
-                        body: [
-                            [{ text: 'Quality', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                             { text: 'Remarks', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                             { text: 'Overall Severity', fillColor: '#E9E5E5', bold: true, alignment: 'center' }],
-                            [{ text: commit_quality, alignment: 'center' },
-                             { text: commit_remarks, alignment: 'center' },
-                             { text: commit_severity, alignment: 'center' }]
-                        ]
-                    }
-                },
-                { text: 'Issues Identified:', style: 'subheader' },
-                {
-                    table: {
-                        headerRows: 1,
-                        widths: ['5%', '20%', '30%', '10%', '25%', '10%'],
-                        body: [
-                            [
-                                { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Issue', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Explanation', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Severity', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Suggested Fix', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Files Changed', fillColor: '#E9E5E5', bold: true, alignment: 'center' }
-                            ],
-                            ...issues.map((issue, index) => [
-                                { text: index + 1, fontSize: 10, alignment: 'center' },
-                                { text: issue.identification, fontSize: 10 },
-                                { text: issue.explanation, fontSize: 10 },
-                                { text: issue.severity, fontSize: 10, alignment: 'center' },
-                                { text: issue.fix, fontSize: 10 },
-                                { text: issue.filename, fontSize: 10 }
-                            ])
-                        ]
-                    }
+    } else {
+    }
+    // Optionally get disallowed files data if it exists
+    let disallowedFilesContent = "";
+    const disallowedFilesTable = document.getElementById("disallowedFilesTable");
+    if (disallowedFilesTable) {
+        const row = disallowedFilesTable.querySelector("tr");
+        if (row) {
+            const td = row.querySelector("td");
+            if (td) {
+                disallowedFilesContent = td.innerText;
+            }
+        }
+    } else {
+    }
+    // Create file name using current date
+    const currentDate = new Date();
+    const formattedDate = currentDate.toLocaleDateString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric'
+    }).replace(' ', '_').replace(',', '');
+    const fileName = 'commit_review_' + formattedDate + '.pdf';
+    // Create the PDF document definition
+    const docDefinition = {
+        pageOrientation: 'landscape',
+        content: [
+            { text: 'Commit Review', style: 'header' },
+            // Optional Secrets Section
+            ...(secretsContent.length ? [{
+                text: 'Potential Secrets Found:',
+                style: 'subheader'
+            },
+            {
+                table: {
+                    headerRows: 1,
+                    widths: ['10%', '45%', '45%'],
+                    body: [
+                        [
+                            { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Filename', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Secret', fillColor: '#E9E5E5', bold: true, alignment: 'center' }
+                        ],
+                        ...secretsContent.map(secret => [
+                            { text: secret.sno, alignment: 'center' },
+                            { text: secret.filename ,alignment: 'center'},
+                            { text: secret.secret }
+                        ])
+                    ]
                 }
-            ],
-            styles: {
-                header: {
-                    fontSize: 18,
-                    bold: true,
-                    alignment: 'center',
-                    margin: [0, 0, 0, 10]
-                },
-                subheader: {
-                    fontSize: 14,
-                    bold: true,
-                    margin: [0, 10, 0, 5]
+            }] : []),
+            // Optional Disallowed Files Section
+            ...(disallowedFilesContent ? [{
+                text: 'Disallowed Files Found:',
+                style: 'subheader'
+            },
+            {
+                table: {
+                    widths: ['100%'],
+                    body: [
+                        [
+                             { text: disallowedFilesContent, margin: [0, 5, 0, 5] }
+                        ]
+                    ]
+                }
+            }] : []),
+            // Summary Section
+            { text: 'Summary:', style: 'subheader' },
+            {
+                table: {
+                    widths: ['25%', '50%', '25%'],
+                    body: [
+                        [
+                            { text: 'Quality', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Remarks', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Overall Severity', fillColor: '#E9E5E5', bold: true, alignment: 'center' }
+                        ],
+                        [
+                            { text: summaryData.quality, alignment: 'center' },
+                            { text: summaryData.remarks },
+                            { text: summaryData.severity, alignment: 'center' }
+                        ]
+                    ]
+                }
+            },
+            // Issues Section
+            { text: 'Issues Identified:', style: 'subheader' },
+            {
+                table: {
+                    headerRows: 1,
+                    widths: ['5%', '20%', '30%', '10%', '25%', '10%'],
+                    body: [
+                        [
+                            { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Identification', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Explanation', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Severity', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Suggested Fix', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                            { text: 'Files Changed', fillColor: '#E9E5E5', bold: true, alignment: 'center' }
+                        ],
+                        ...issues.map((issue, index) => [
+                            { text: index + 1, fontSize: 10, alignment: 'center' },
+                            { text: issue.identification, fontSize: 10 },
+                            { text: issue.explanation, fontSize: 10 },
+                            { text: issue.severity, fontSize: 10, alignment: 'center' },
+                            { text: issue.fix, fontSize: 10 },
+                            { text: issue.filename, alignment: 'center', fontSize: 10 }
+                        ])
+                    ]
                 }
             }
-        };
-        pdfMake.createPdf(docDefinition).download(fileName);
+        ],
+        styles: {
+            header: {
+                fontSize: 18,
+                bold: true,
+                alignment: 'center',
+                margin: [0, 0, 0, 10]
+            },
+            subheader: {
+                fontSize: 14,
+                bold: true,
+                margin: [0, 10, 0, 5]
+            }
+        }
+    };
+    // Generate and download the PDF using pdfMake
+    pdfMake.createPdf(docDefinition).download(fileName, () => {
     });
+});
 </script>
 </body>
 </html>
@@ -373,7 +630,6 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
     start "" "$html_file_with_timestamp"
     sleep 1  
-    powershell -Command "(New-Object -ComObject WScript.Shell).AppActivate('chrome')"
 else
     echo "Unsupported OS. Open the file manually: $html_file"
 fi  
