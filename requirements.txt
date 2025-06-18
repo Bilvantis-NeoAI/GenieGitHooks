@@ -1,6 +1,9 @@
-PySide6>=6.8.0
-Requests==2.32.3
+psutil==6.0.0
+pyinstaller==6.12.0
+PySide6==6.8.2.1
+PySide6==6.9.1
+PySide6_Addons==6.8.2.1
+PySide6_Essentials==6.8.2.1
+Requests==2.32.4
+winshell==0.6
 
-# Optional dependencies for building executables
-# Install with: pip install pyinstaller
-# pyinstaller>=5.0
