@@ -453,3 +453,12 @@ def another_function():
     unused_var = "this is not used"
     
     return query
+
+def another_function():
+    # SQL injection vulnerability
+    query = "SELECT * FROM users WHERE id = " + str(user_id)
+    
+    # Unused variable
+    unused_var = "this is not used"
+    
+    return query
