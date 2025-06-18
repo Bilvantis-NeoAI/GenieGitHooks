@@ -1,14 +1,4 @@
-import os
-import sys
-
-print("Generating PyInstaller spec file for Genie- Commit Review...")
-
-# Check if icon files exist
-icon_ico = 'icon.ico' if os.path.exists('icon.ico') else None
-icon_icns = 'icon.icns' if os.path.exists('icon.icns') else None
-
-# Build the spec content
-spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
+# -*- mode: python ; coding: utf-8 -*-
 # Auto-generated spec file for Genie- Commit Review
 
 import sys
@@ -35,7 +25,7 @@ a = Analysis(
         'pkg_resources.py2_warn'
     ],
     hookspath=[],
-    hooksconfig={{}},
+    hooksconfig={},
     runtime_hooks=[],
     excludes=[
         'PySide6.QtWebEngineCore', 
@@ -72,18 +62,16 @@ exe = EXE(
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
-    entitlements_file=None,{f"""
-    icon='{icon_ico}'""" if icon_ico else ""}
+    entitlements_file=None,
 )
 
 # Create app bundle on macOS
 if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
-        name='GenieCommitReview.app',{f"""
-        icon='{icon_icns}',""" if icon_icns else ""}
+        name='GenieCommitReview.app',
         bundle_identifier='com.bilvantis.genie-githooks',
-        info_plist={{
+        info_plist={
             'CFBundleName': 'Genie- Commit Review',
             'CFBundleDisplayName': 'Genie- Commit Review',
             'CFBundleVersion': '2.0.0',
@@ -94,22 +82,5 @@ if sys.platform == 'darwin':
             'NSRequiresAquaSystemAppearance': 'False',
             'LSApplicationCategoryType': 'public.app-category.developer-tools',
             'NSHumanReadableCopyright': '© 2024 Bilvantis. All rights reserved.'
-        }}
+        }
     )
-'''
-
-# Write the spec file
-with open('genie-commit-review.spec', 'w') as f:
-    f.write(spec_content)
-
-print("✅ PyInstaller spec file generated: genie-commit-review.spec")
-
-if icon_ico:
-    print(f"📎 Using Windows icon: {icon_ico}")
-else:
-    print("⚠️  No icon.ico found - using default icon for Windows")
-    
-if icon_icns:
-    print(f"📎 Using macOS icon: {icon_icns}")
-else:
-    print("⚠️  No icon.icns found - using default icon for macOS") 

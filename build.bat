@@ -1,5 +1,5 @@
 @echo off
-echo 🖥️ Building Genie GitHooks for Windows...
+echo 🖥️ Building Genie- Commit Review for Windows...
 
 REM Activate virtual environment if it exists
 if exist venv\Scripts\activate.bat (
@@ -31,7 +31,7 @@ python generate_spec.py
 
 REM Build the executable
 echo Building Windows executable...
-pyinstaller --clean genie-githooks.spec
+pyinstaller --clean genie-commit-review.spec
 if errorlevel 1 (
     echo ❌ Build failed
     pause
@@ -39,7 +39,7 @@ if errorlevel 1 (
 )
 
 echo ✅ Build complete!
-echo The executable can be found at dist\GenieGitHooks.exe
+echo The executable can be found at dist\GenieCommitReview.exe
 echo.
 echo 🚀 To distribute:
 echo    • Copy the entire dist folder for distribution

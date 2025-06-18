@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "🚀 Building Genie GitHooks..."
+echo "🚀 Building Genie- Commit Review..."
 
 # Check if we're in the right directory
 if [ ! -f "app.py" ]; then
@@ -29,7 +29,7 @@ python generate_spec.py
 
 # Build the executable
 echo "Building executable..."
-pyinstaller --clean genie-githooks.spec
+pyinstaller --clean genie-commit-review.spec
 if [ $? -ne 0 ]; then
     echo "❌ Build failed"
     exit 1
@@ -39,7 +39,7 @@ fi
 if [ "$(uname)" = "Darwin" ]; then
     # macOS
     echo "✅ Build complete!"
-    echo "The application can be found at dist/GenieGitHooks.app"
+    echo "The application can be found at dist/GenieCommitReview.app"
     echo ""
     echo "🍎 For professional macOS distribution, use:"
     echo "   ./build-mac.sh"

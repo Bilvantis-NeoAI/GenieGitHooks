@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec file for Genie GitHooks
+# PyInstaller spec file for Genie- Commit Review
 # This file can be used directly or auto-generated via generate_spec.py
 
 import sys
@@ -51,7 +51,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='GenieGitHooks',
+    name='GenieCommitReview',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -71,12 +71,12 @@ exe = EXE(
 if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
-        name='GenieGitHooks.app',
+        name='GenieCommitReview.app',
         # icon='icon.icns',  # Uncomment and add icon file if available
         bundle_identifier='com.bilvantis.genie-githooks',
         info_plist={
-            'CFBundleName': 'Genie GitHooks',
-            'CFBundleDisplayName': 'Genie GitHooks',
+            'CFBundleName': 'Genie- Commit Review',
+            'CFBundleDisplayName': 'Genie- Commit Review',
             'CFBundleVersion': '2.0.0',
             'CFBundleShortVersionString': '2.0.0',
             'NSHighResolutionCapable': 'True',

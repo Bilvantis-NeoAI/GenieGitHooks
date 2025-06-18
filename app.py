@@ -83,7 +83,7 @@ class BackendURLWindow(QWidget):
         self.setup_ui()
         
     def setup_ui(self):
-        self.setWindowTitle("Genie GitHooks - Setup")
+        self.setWindowTitle("Genie- Commit Review - Setup")
         self.setFixedSize(380, 350)
         self.center_window()
         
@@ -220,7 +220,7 @@ class LoginWindow(QWidget):
         self.setup_ui()
         
     def setup_ui(self):
-        self.setWindowTitle("Genie GitHooks - Login")
+        self.setWindowTitle("Genie- Commit Review - Login")
         self.setFixedSize(360, 350)
         self.center_window()
         
@@ -795,7 +795,7 @@ class RegisterWindow(QWidget):
         self.setup_ui()
         
     def setup_ui(self):
-        self.setWindowTitle("Genie GitHooks - Register")
+        self.setWindowTitle("Genie- Commit Review - Register")
         self.setFixedSize(360, 520)
         self.center_window()
         
@@ -812,7 +812,7 @@ class RegisterWindow(QWidget):
         header_label.setFont(header_font)
         header_label.setAlignment(Qt.AlignCenter)
         
-        sub_header = QLabel("Join Genie GitHooks today")
+        sub_header = QLabel("Join Genie- Commit Review today")
         sub_header.setAlignment(Qt.AlignCenter)
         
         # Form layout
@@ -995,7 +995,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # Set application properties
-    app.setApplicationName("Genie GitHooks")
+    app.setApplicationName("Genie- Commit Review")
     app.setApplicationVersion("2.0.0")
     app.setOrganizationName("Bilvantis")
     
