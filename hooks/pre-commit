@@ -8,10 +8,12 @@ else
    echo "WARNING: Python3 is not installed. Commit review functionality will not work."
    exit 1
 fi
+
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
+
 # Function to display a Tkinter message box
 show_message_box() {
     local message="$1"
@@ -23,130 +25,233 @@ root.withdraw()
 messagebox.showinfo("Genie GitHooks", '$message')
 EOF
 }
-# Function to get user confirmation via Tkinter
-get_user_confirmation() {
-    local prompt="$1"
+
+# Function to extract and open HTML from API response
+open_html_in_browser() {
+    local api_response="$1"
+    # Use cross-platform mktemp (macOS doesn't support --suffix)
+    local temp_file=$(mktemp).html
+    local temp_response_file=$(mktemp)
+    
+    # Write response to a temp file to avoid bash multiline string issues
+    printf '%s' "$api_response" > "$temp_response_file"
+    
+    # Use Python to properly extract HTML from the response
     $python_cmd - <<EOF
-import tkinter as tk
-from tkinter import messagebox
-root = tk.Tk()
-root.withdraw()
-response = messagebox.askyesno("Genie GitHooks", "$prompt")
-print("Y" if response else "N")
+import json
+import sys
+import webbrowser
+
+response_file = '$temp_response_file'
+html_file = '$temp_file'
+
+try:
+    # Read the response from temp file
+    with open(response_file, 'r', encoding='utf-8') as f:
+        api_response = f.read()
+    
+    print(f"Processing response of {len(api_response)} characters")
+    
+    # Try to parse as JSON first (in case the HTML is wrapped in JSON)
+    html_content = api_response
+    try:
+        parsed = json.loads(api_response)
+        if isinstance(parsed, dict):
+            # Check for common HTML response keys
+            for key in ['html', 'content', 'response', 'data']:
+                if key in parsed:
+                    html_content = parsed[key]
+                    print(f"Found HTML content in JSON key: {key}")
+                    break
+            else:
+                print("JSON response but no recognized HTML key, using raw response")
+        else:
+            print("JSON response is not a dict, using raw response")
+    except json.JSONDecodeError:
+        print("Response is not JSON, treating as HTML")
+    
+    # Write HTML to temp file
+    with open(html_file, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    print(f"HTML file created: {html_file}")
+    print(f"HTML content starts with: {html_content[:100]}...")
+    
+    # Open in browser
+    webbrowser.open('file://' + html_file)
+    
+except Exception as e:
+    print(f"Error processing HTML response: {e}")
+    # Fallback: write raw response to file
+    try:
+        with open(response_file, 'r', encoding='utf-8') as f:
+            raw_content = f.read()
+        with open(html_file, 'w', encoding='utf-8') as f:
+            f.write(raw_content)
+        webbrowser.open('file://' + html_file)
+    except Exception as e2:
+        print(f"Fallback also failed: {e2}")
+EOF
+    
+    # Clean up temp response file
+    rm -f "$temp_response_file"
+}
+
+# Function to detect programming language from file extensions
+detect_language() {
+    local files="$1"
+    
+    $python_cmd - <<EOF
+import sys
+files = """$files""".strip().split('\n')
+extensions = {}
+for file in files:
+    if '.' in file:
+        ext = file.split('.')[-1].lower()
+        extensions[ext] = extensions.get(ext, 0) + 1
+
+# Language mapping
+lang_map = {
+    'py': 'python',
+    'js': 'javascript',
+    'ts': 'typescript',
+    'java': 'java',
+    'cpp': 'cpp',
+    'c': 'c',
+    'cs': 'csharp',
+    'php': 'php',
+    'rb': 'ruby',
+    'go': 'go',
+    'rs': 'rust',
+    'kt': 'kotlin',
+    'swift': 'swift',
+    'html': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'sql': 'sql',
+    'sh': 'bash',
+    'yml': 'yaml',
+    'yaml': 'yaml',
+    'json': 'json',
+    'xml': 'xml'
+}
+
+if extensions:
+    most_common_ext = max(extensions, key=extensions.get)
+    print(lang_map.get(most_common_ext, 'text'))
+else:
+    print('text')
 EOF
 }
+
 # Check if Git is installed
 if ! command_exists git; then
-    show_message_box " Error: Git is not installed. Please install Git before proceeding."
+    show_message_box "Error: Git is not installed. Please install Git before proceeding."
     exit 1
 fi
+
 # Check if Git global username and email are set
 GIT_USERNAME=$(git config --global user.name)
 GIT_EMAIL=$(git config --global user.email)
  
 if [ -z "$GIT_USERNAME" ] || [ -z "$GIT_EMAIL" ]; then
-    show_message_box ' Error: Git global username and/or email is not set.\nPlease configure them using: \n git config --global user.name "Your Name" \n git config --global user.email  "you@example.com"'
+    show_message_box 'Error: Git global username and/or email is not set.\nPlease configure them using: \n git config --global user.name "Your Name" \n git config --global user.email  "you@example.com"'
     exit 1
 fi
-# Get staged files
+
+# Get staged files and diff content
 staged_files=$(git diff --cached --name-only)
 diff_content=$(git diff --cached)
-repo_name=$(git config --get remote.origin.url | sed 's#.*/##;s/.git//')
- 
+repo_name=$(git config --get remote.origin.url | sed 's#.*/##;s/.git//' 2>/dev/null || basename "$(pwd)")
+branch_name=$(git rev-parse --abbrev-ref HEAD)
+
 if [[ -z "$staged_files" ]]; then
     show_message_box "No files staged for commit."
     exit 0
 fi
-# Convert staged files to JSON
-staged_files_json=$(printf '%s\n' "$staged_files" | sed 's/^/"/; s/$/"/' | paste -sd, - | sed 's/^/[/' | sed 's/$/]/')
+
+if [[ -z "$diff_content" ]]; then
+    show_message_box "No changes detected in staged files."
+    exit 0
+fi
+
+# Detect programming language
+language=$(detect_language "$staged_files")
+
+# Escape diff content for JSON
 escaped_diff_content=$(printf '%s' "$diff_content" | $python_cmd -c "import json, sys; print(json.dumps(sys.stdin.read()))")
-# Prepare JSON payload
+
+# Prepare JSON payload for new API
 json_payload=$(cat <<EOF
 {
-    "staged_files": $staged_files_json,
-    "diff_content": $escaped_diff_content,
-    "reponame": "$repo_name",
-    "user_id": "${userId}"
+    "code": $escaped_diff_content,
+    "language": "$language",
+    "project_name": "$repo_name",
+    "branch_name": "$branch_name",
+    "html": true
 }
 EOF
-) 
-api_url="${BASE_API}/review/commit-scan"
+)
+
+# Get JWT token for authentication
+jwt_token=""
+if [ -f "$HOME/.genie/token" ]; then
+    jwt_token=$(cat "$HOME/.genie/token" 2>/dev/null)
+fi
+
+if [ -z "$jwt_token" ]; then
+    show_message_box "ERROR: Authentication token not found. Please run the Genie GitHooks app to login again."
+    exit 1
+fi
+
+# Send to new API endpoint with authentication
+api_url="${BASE_API}/review/review"
 json_file=$(mktemp)
 echo "$json_payload" > "$json_file"
-response=$(curl -s -X POST -H "Content-Type: application/json" -d @"$json_file" "$api_url")
+
+echo "Sending code for review..."
+response=$(curl -s -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $jwt_token" -d @"$json_file" "$api_url")
 rm "$json_file"
- 
+
 # Check response
-if [ -z "$response" ] || [[ "$response" == *'"detail":"Not Found"'* ]]; then
+if [ -z "$response" ]; then
     show_message_box "ERROR: Unable to communicate with the server. Check internet connection or server status."
     exit 1
 fi
-# Parse API response
-has_secrets=$($python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('has_secrets', 'false'))" <<< "$response")
-has_disallowed_files=$($python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(data.get('has_disallowed_files', 'false'))" <<< "$response")
-files_disallowed=$($python_cmd -c "import json, sys; data = json.loads(sys.stdin.read()); print(', '.join(data.get('files_disallowed', [])))" <<< "$response")
-list_secrets_found=$($python_cmd -c "
-import json, sys
-data = json.loads(sys.stdin.read())
-secrets = [
-    '\\n'.join([
-        '-' * 30,
-        f'File: {item[\"filename\"]}',
-        f'Pattern: Potential Secret',
-        f'Content: {item[\"line_content\"]}'
-    ])
-    for item in data.get('list_secrets_found', [])
-]
-print('\\n'.join(secrets))
-" <<< "$response")
-secrets_list_json=$($python_cmd -c "
-import json, sys
-data = json.loads(sys.stdin.read())
-secrets = [
-    {
-        'filename': item['filename'],
-        'content': item['line_content']
-    }
-    for item in data.get('list_secrets_found', [])
-]
-print(json.dumps(secrets))  # Ensure proper JSON format
-" <<< "$response")
-files_disallowed_json=$($python_cmd -c "
-import json, sys
-data = json.loads(sys.stdin.read())
-print(json.dumps(data.get('files_disallowed', [])))  # Properly formatted JSON list
-" <<< "$response")
-# Convert the boolean values to lowercase for consistent comparison
-has_secrets=$(echo "$has_secrets" | tr '[:upper:]' '[:lower:]')
-has_disallowed_files=$(echo "$has_disallowed_files" | tr '[:upper:]' '[:lower:]')
-# Handle disallowed files
-if [[ "$has_disallowed_files" == "true" ]]; then
-    user_input=$(get_user_confirmation "Disallowed files detected: \n$files_disallowed\nDo you want to proceed?")
-    if [[ "$user_input" != "Y" ]]; then
-        show_message_box "Commit aborted by user."
-        exit 1
-    fi
+
+# Check for authentication errors
+if [[ "$response" == *'"detail":'* ]] && [[ "$response" == *'"Unauthorized"'* ]]; then
+    show_message_box "ERROR: Authentication failed. Your session may have expired.\nPlease run the Genie GitHooks app to login again."
+    exit 1
 fi
-# Handle secrets detection
-if [[ "$has_secrets" == "true" ]]; then
-    escaped_secrets=$(echo "$list_secrets_found" | sed ':a;N;$!ba;s/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g')
-    user_input=$(get_user_confirmation "Secrets detected in staged files!\n$escaped_secrets  \nDo you want to proceed anyway?")
-    if [[ "$user_input" != "Y" ]]; then
-        show_message_box "Commit aborted by user."
-        exit 1
-    fi
-fi 
-# Define metadata file
-metadata_file=".commit_metadata.json"
-commit_metadata=$(cat <<EOF
-{
-    "has_secrets": $has_secrets,
-    "secrets_found": $secrets_list_json,
-    "has_disallowed_files": $has_disallowed_files,
-    "disallowed_files": $files_disallowed_json
-}
-EOF
-) 
-# Save metadata to a file for use in post-commit
-echo "$commit_metadata" > "$metadata_file"
+
+if [[ "$response" == *'"detail":'* ]] && [[ "$response" == *'"Invalid token"'* ]]; then
+    show_message_box "ERROR: Authentication token is invalid.\nPlease run the Genie GitHooks app to login again."
+    exit 1
+fi
+
+# Check if response contains error
+if [[ "$response" == *'"detail":'* ]] && [[ "$response" == *'"Not Found"'* ]]; then
+    show_message_box "ERROR: API endpoint not found. Please check server configuration."
+    exit 1
+fi
+
+# Debug: Show first part of response (for troubleshooting)
+echo "API Response received (first 200 chars):"
+echo "$response" | head -c 200
+echo "..."
+
+# Check if response looks like HTML
+if [[ "$response" == *"<html"* ]] || [[ "$response" == *"<!DOCTYPE"* ]] || [[ "$response" == *"<HTML"* ]]; then
+    echo "Response appears to be HTML format"
+elif [[ "$response" == *"{"* ]] && [[ "$response" == *"}"* ]]; then
+    echo "Response appears to be JSON format"
+else
+    echo "Response format unclear, treating as HTML"
+fi
+
+# Open HTML response in browser
+echo "Opening code review in browser..."
+open_html_in_browser "$response"
+
 exit 0
