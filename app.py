@@ -579,9 +579,28 @@ class LoginWindow(QWidget):
             
             genie_signature = "# GENIE_GITHOOKS_MARKER"
             
-            # Define source paths
-            pre_commit_source = "hooks/pre-commit"
-            post_commit_source = "hooks/post-commit"
+            # Define source paths - handle both development and packaged app
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable - use PyInstaller's temp folder
+                base_path = sys._MEIPASS
+                hooks_base = os.path.join(base_path, 'hooks')
+            else:
+                # Running in development
+                hooks_base = "hooks"
+                
+            pre_commit_source = os.path.join(hooks_base, "pre-commit")
+            post_commit_source = os.path.join(hooks_base, "post-commit")
+            
+            logging.info(f"Looking for hooks in: {hooks_base}")
+            logging.info(f"Pre-commit source exists: {os.path.exists(pre_commit_source)}")
+            logging.info(f"Post-commit source exists: {os.path.exists(post_commit_source)}")
+            
+            # Check if hook files exist before installation
+            if not os.path.exists(pre_commit_source) and not os.path.exists(post_commit_source):
+                error_msg = f"Hook source files not found in {hooks_base}. Installation cannot proceed."
+                logging.error(error_msg)
+                QMessageBox.critical(self, "Error", error_msg)
+                return
             
             # Install pre-commit hook
             if os.path.exists(pre_commit_source):
