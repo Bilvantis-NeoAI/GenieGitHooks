@@ -251,14 +251,35 @@ fi
 # Detect programming language
 language=$(detect_language "$staged_files")
 
+# Debug: Show what we're working with
+echo "DEBUG: Staged files: $staged_files"
+echo "DEBUG: Language detected: $language"
+echo "DEBUG: Repo name: $repo_name"
+echo "DEBUG: Branch name: $branch_name"
+echo "DEBUG: Diff content length: ${#diff_content}"
+echo "DEBUG: First 200 chars of diff:"
+echo "$diff_content" | head -c 200
+echo ""
+echo "--- End diff preview ---"
+
 # Create JSON payload using Python to handle proper escaping
 json_file=$(mktemp)
-printf '%s' "$diff_content" | $python_cmd - <<EOF > "$json_file"
+diff_file=$(mktemp)
+
+# Write diff content to temporary file (avoids printf issues with special characters)
+echo "$diff_content" > "$diff_file"
+
+$python_cmd - <<EOF > "$json_file"
 import json
 import sys
 
-# Read the diff content from stdin
-diff_content = sys.stdin.read()
+# Read the diff content from temporary file
+with open('$diff_file', 'r', encoding='utf-8') as f:
+    diff_content = f.read()
+
+# Debug: Print what we received
+print(f"DEBUG: Python received {len(diff_content)} characters", file=sys.stderr)
+print(f"DEBUG: First 100 chars: {repr(diff_content[:100])}", file=sys.stderr)
 
 # Create the payload with proper JSON encoding
 payload = {
@@ -269,9 +290,21 @@ payload = {
     "html": True
 }
 
+# Debug: Print payload info
+print(f"DEBUG: Code field length in payload: {len(payload['code'])}", file=sys.stderr)
+
 # Output the JSON
 print(json.dumps(payload))
 EOF
+
+# Clean up the temporary diff file
+rm -f "$diff_file"
+
+# Debug: Show the JSON file content
+echo "DEBUG: JSON payload preview (first 500 chars):"
+head -c 500 "$json_file"
+echo ""
+echo "--- End JSON preview ---"
 
 # Get JWT token for authentication
 jwt_token=""
