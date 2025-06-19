@@ -50,8 +50,6 @@ try:
     with open(response_file, 'r', encoding='utf-8') as f:
         api_response = f.read()
     
-    print(f"Processing response of {len(api_response)} characters")
-    
     # Try to parse as JSON first (in case the HTML is wrapped in JSON)
     html_content = api_response
     try:
@@ -61,27 +59,18 @@ try:
             for key in ['html', 'content', 'response', 'data']:
                 if key in parsed:
                     html_content = parsed[key]
-                    print(f"Found HTML content in JSON key: {key}")
                     break
-            else:
-                print("JSON response but no recognized HTML key, using raw response")
-        else:
-            print("JSON response is not a dict, using raw response")
     except json.JSONDecodeError:
-        print("Response is not JSON, treating as HTML")
+        pass
     
     # Write HTML to temp file
     with open(html_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
     
-    print(f"HTML file created: {html_file}")
-    print(f"HTML content starts with: {html_content[:100]}...")
-    
     # Open in browser
     webbrowser.open('file://' + html_file)
     
 except Exception as e:
-    print(f"Error processing HTML response: {e}")
     # Fallback: write raw response to file
     try:
         with open(response_file, 'r', encoding='utf-8') as f:
@@ -90,7 +79,7 @@ except Exception as e:
             f.write(raw_content)
         webbrowser.open('file://' + html_file)
     except Exception as e2:
-        print(f"Fallback also failed: {e2}")
+        pass
 EOF
     
     # Clean up temp response file
@@ -262,20 +251,27 @@ fi
 # Detect programming language
 language=$(detect_language "$staged_files")
 
-# Escape diff content for JSON
-escaped_diff_content=$(printf '%s' "$diff_content" | $python_cmd -c "import json, sys; print(json.dumps(sys.stdin.read()))")
+# Create JSON payload using Python to handle proper escaping
+json_file=$(mktemp)
+printf '%s' "$diff_content" | $python_cmd - <<EOF > "$json_file"
+import json
+import sys
 
-# Prepare JSON payload for new API
-json_payload=$(cat <<EOF
-{
-    "code": $escaped_diff_content,
+# Read the diff content from stdin
+diff_content = sys.stdin.read()
+
+# Create the payload with proper JSON encoding
+payload = {
+    "code": diff_content,
     "language": "$language",
-    "project_name": "$repo_name",
+    "project_name": "$repo_name", 
     "branch_name": "$branch_name",
-    "html": true
+    "html": True
 }
+
+# Output the JSON
+print(json.dumps(payload))
 EOF
-)
 
 # Get JWT token for authentication
 jwt_token=""
@@ -290,8 +286,6 @@ fi
 
 # Send to new API endpoint with authentication
 api_url="${BASE_API}/review/review"
-json_file=$(mktemp)
-echo "$json_payload" > "$json_file"
 
 response=$(curl -s -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $jwt_token" -d @"$json_file" "$api_url")
 rm "$json_file"
@@ -319,22 +313,7 @@ if [[ "$response" == *'"detail":'* ]] && [[ "$response" == *'"Not Found"'* ]]; t
     exit 1
 fi
 
-# Debug: Show first part of response (for troubleshooting)
-# echo "API Response received (first 200 chars):"
-# echo "$response" | head -c 200
-# echo "..."
-
-# # Check if response looks like HTML
-# if [[ "$response" == *"<html"* ]] || [[ "$response" == *"<!DOCTYPE"* ]] || [[ "$response" == *"<HTML"* ]]; then
-#     echo "Response appears to be HTML format"
-# elif [[ "$response" == *"{"* ]] && [[ "$response" == *"}"* ]]; then
-#     echo "Response appears to be JSON format"
-# else
-#     echo "Response format unclear, treating as HTML"
-# fi
-
 # Open HTML response in browser
-# echo "Opening code review in browser..."
 open_html_in_browser "$response"
 
 exit 0
