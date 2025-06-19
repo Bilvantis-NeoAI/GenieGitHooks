@@ -23,7 +23,14 @@ a = Analysis(
         'traceback',
         'logging',
         'platform',
-        'pkg_resources.py2_warn'
+        'pkg_resources.py2_warn',
+        'cryptography',
+        'cryptography.hazmat.primitives.ciphers',
+        'cryptography.hazmat.primitives.ciphers.algorithms',
+        'cryptography.hazmat.primitives.ciphers.modes',
+        'cryptography.hazmat.backends',
+        'cryptography.hazmat.backends.openssl',
+        'base64'
     ],
     hookspath=[],
     hooksconfig={},

@@ -12,6 +12,59 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+import base64
+
+def encrypt_data(request_data):
+    """Encrypt data using AES encryption with static key and IV."""
+    try:
+        # Static key and IV (must be bytes) - same as backend
+        key = b'1234567890123456'  # 16 bytes key (AES-128)
+        iv = b'abcdefghijklmnop'   # 16 bytes IV
+
+        # Convert input string to bytes
+        if isinstance(request_data, str):
+            request_data = request_data.encode()
+
+        # PKCS7 Padding for block size 16 bytes
+        pad_len = 16 - len(request_data) % 16
+        padded_data = request_data + bytes([pad_len] * pad_len)
+
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        encrypted = encryptor.update(padded_data) + encryptor.finalize()
+
+        # Return base64 encoded string
+        return base64.b64encode(encrypted).decode()
+    except Exception as e:
+        logging.error(f"Encryption error: {e}")
+        return None
+
+def decrypt_data(encrypted_data):
+    """Decrypt data using AES decryption with static key and IV."""
+    try:
+        # Static key and IV (must be bytes) - same as backend
+        key = b'1234567890123456'  # 16 bytes key (AES-128)
+        iv = b'abcdefghijklmnop'   # 16 bytes IV
+
+        # Base64 decode the encrypted data
+        encrypted_bytes = base64.b64decode(encrypted_data)
+
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted_padded = decryptor.update(encrypted_bytes) + decryptor.finalize()
+
+        # Remove PKCS7 padding
+        pad_len = decrypted_padded[-1]
+        decrypted = decrypted_padded[:-pad_len]
+
+        # Return decrypted data as UTF-8 string
+        return decrypted.decode('utf-8')
+
+    except Exception as e:
+        logging.error(f"Decryption error: {e}")
+        return None
 
 # Helper function for subprocess calls to prevent terminal windows
 def run_subprocess(cmd, **kwargs):
@@ -367,7 +420,16 @@ class LoginWindow(QWidget):
         
     def authenticate_user(self, username, password):
         try:
-            payload = {'username': username, 'email': username, 'password': password}
+            # Encrypt the password before sending to backend
+            encrypted_password = encrypt_data(password)
+            if not encrypted_password:
+                self.loading_widget.hide()
+                self.login_button.setEnabled(True)
+                self.register_button.setEnabled(True)
+                QMessageBox.critical(self, "Error", "Failed to encrypt password. Please try again.")
+                return
+
+            payload = {'username': username, 'email': username, 'password': encrypted_password}
             headers = {'Content-Type': 'application/x-www-form-urlencoded'}
             
             login_url = f"{self.backend_url}/auth/login"
@@ -950,11 +1012,22 @@ class RegisterWindow(QWidget):
         QTimer.singleShot(100, lambda: self.create_account(fullname, email, company_name, password, confirm_password))
         
     def create_account(self, fullname, email, company_name, password, confirm_password):
+        # Encrypt passwords before sending to backend
+        encrypted_password = encrypt_data(password)
+        encrypted_confirm_password = encrypt_data(confirm_password)
+        
+        if not encrypted_password or not encrypted_confirm_password:
+            self.loading_widget.hide()
+            self.register_button.setEnabled(True)
+            self.back_button.setEnabled(True)
+            QMessageBox.critical(self, "Error", "Failed to encrypt passwords. Please try again.")
+            return
+
         payload = {
             "email": email,
             "full_name": fullname,
-            "password": password,
-            "confirm_password": confirm_password,
+            "password": encrypted_password,
+            "confirm_password": encrypted_confirm_password,
             "username": email,
             "company_name": company_name
         }
