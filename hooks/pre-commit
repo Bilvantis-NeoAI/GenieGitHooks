@@ -103,44 +103,128 @@ detect_language() {
     
     $python_cmd - <<EOF
 import sys
+import os
 files = """$files""".strip().split('\n')
+
+# Check for special file patterns first
+special_files = {
+    'requirements.txt': 'python',
+    'pyproject.toml': 'python',
+    'setup.py': 'python',
+    'setup.cfg': 'python',
+    'pipfile': 'python',
+    'pipfile.lock': 'python',
+    'poetry.lock': 'python',
+    'conda.yaml': 'python',
+    'environment.yml': 'python',
+    'package.json': 'javascript',
+    'package-lock.json': 'javascript',
+    'yarn.lock': 'javascript',
+    'bower.json': 'javascript',
+    'webpack.config.js': 'javascript',
+    'gulpfile.js': 'javascript',
+    'gruntfile.js': 'javascript',
+    'dockerfile': 'docker',
+    'docker-compose.yml': 'docker',
+    'docker-compose.yaml': 'docker',
+    'makefile': 'makefile',
+    'rakefile': 'ruby',
+    'gemfile': 'ruby',
+    'gemfile.lock': 'ruby',
+    'cargo.toml': 'rust',
+    'cargo.lock': 'rust',
+    'pom.xml': 'java',
+    'build.gradle': 'java',
+    'composer.json': 'php',
+    'composer.lock': 'php'
+}
+
+# Check if any files match special patterns
+for file in files:
+    filename = os.path.basename(file).lower()
+    if filename in special_files:
+        print(special_files[filename])
+        exit()
+
+# If no special files found, proceed with extension-based detection
 extensions = {}
 for file in files:
     if '.' in file:
         ext = file.split('.')[-1].lower()
         extensions[ext] = extensions.get(ext, 0) + 1
 
-# Language mapping
+# Enhanced language mapping
 lang_map = {
     'py': 'python',
+    'pyx': 'python',
+    'pyi': 'python',
     'js': 'javascript',
+    'jsx': 'javascript',
     'ts': 'typescript',
+    'tsx': 'typescript',
     'java': 'java',
+    'class': 'java',
+    'jar': 'java',
     'cpp': 'cpp',
+    'cxx': 'cpp',
+    'cc': 'cpp',
     'c': 'c',
+    'h': 'c',
+    'hpp': 'cpp',
     'cs': 'csharp',
     'php': 'php',
+    'php3': 'php',
+    'php4': 'php',
+    'php5': 'php',
     'rb': 'ruby',
+    'ruby': 'ruby',
     'go': 'go',
     'rs': 'rust',
     'kt': 'kotlin',
+    'kts': 'kotlin',
     'swift': 'swift',
     'html': 'html',
+    'htm': 'html',
     'css': 'css',
     'scss': 'scss',
+    'sass': 'scss',
+    'less': 'css',
     'sql': 'sql',
+    'mysql': 'sql',
+    'postgresql': 'sql',
     'sh': 'bash',
+    'bash': 'bash',
+    'zsh': 'bash',
+    'fish': 'bash',
     'yml': 'yaml',
     'yaml': 'yaml',
     'json': 'json',
-    'xml': 'xml'
+    'jsonc': 'json',
+    'xml': 'xml',
+    'xsd': 'xml',
+    'xsl': 'xml',
+    'md': 'markdown',
+    'markdown': 'markdown',
+    'txt': 'text',
+    'text': 'text',
+    'log': 'text',
+    'cfg': 'text',
+    'conf': 'text',
+    'config': 'text',
+    'ini': 'text',
+    'properties': 'text',
+    'env': 'text',
+    'toml': 'toml',
+    'dockerfile': 'docker',
+    'makefile': 'makefile',
+    'mk': 'makefile'
 }
 
 if extensions:
     most_common_ext = max(extensions, key=extensions.get)
-    print(lang_map.get(most_common_ext, 'text'))
+    print(lang_map.get(most_common_ext, 'unknown'))
 else:
-    print('text')
+    print('unknown')
 EOF
 }
 
@@ -209,7 +293,6 @@ api_url="${BASE_API}/review/review"
 json_file=$(mktemp)
 echo "$json_payload" > "$json_file"
 
-echo "Sending code for review..."
 response=$(curl -s -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $jwt_token" -d @"$json_file" "$api_url")
 rm "$json_file"
 
@@ -237,21 +320,21 @@ if [[ "$response" == *'"detail":'* ]] && [[ "$response" == *'"Not Found"'* ]]; t
 fi
 
 # Debug: Show first part of response (for troubleshooting)
-echo "API Response received (first 200 chars):"
-echo "$response" | head -c 200
-echo "..."
+# echo "API Response received (first 200 chars):"
+# echo "$response" | head -c 200
+# echo "..."
 
-# Check if response looks like HTML
-if [[ "$response" == *"<html"* ]] || [[ "$response" == *"<!DOCTYPE"* ]] || [[ "$response" == *"<HTML"* ]]; then
-    echo "Response appears to be HTML format"
-elif [[ "$response" == *"{"* ]] && [[ "$response" == *"}"* ]]; then
-    echo "Response appears to be JSON format"
-else
-    echo "Response format unclear, treating as HTML"
-fi
+# # Check if response looks like HTML
+# if [[ "$response" == *"<html"* ]] || [[ "$response" == *"<!DOCTYPE"* ]] || [[ "$response" == *"<HTML"* ]]; then
+#     echo "Response appears to be HTML format"
+# elif [[ "$response" == *"{"* ]] && [[ "$response" == *"}"* ]]; then
+#     echo "Response appears to be JSON format"
+# else
+#     echo "Response format unclear, treating as HTML"
+# fi
 
 # Open HTML response in browser
-echo "Opening code review in browser..."
+# echo "Opening code review in browser..."
 open_html_in_browser "$response"
 
 exit 0

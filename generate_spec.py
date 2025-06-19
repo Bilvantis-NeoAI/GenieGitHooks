@@ -93,7 +93,7 @@ if sys.platform == 'darwin':
             'NSPrincipalClass': 'NSApplication',
             'NSRequiresAquaSystemAppearance': 'False',
             'LSApplicationCategoryType': 'public.app-category.developer-tools',
-            'NSHumanReadableCopyright': '© 2024 Bilvantis. All rights reserved.'
+            'NSHumanReadableCopyright': '2025 Bilvantis. All rights reserved.'
         }}
     )
 '''

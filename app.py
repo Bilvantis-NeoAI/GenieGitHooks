@@ -84,7 +84,7 @@ class BackendURLWindow(QWidget):
         
     def setup_ui(self):
         self.setWindowTitle("Genie- Commit Review - Setup")
-        self.setFixedSize(380, 350)
+        self.setFixedSize(480, 420)
         self.center_window()
         
         # Main layout
@@ -221,7 +221,7 @@ class LoginWindow(QWidget):
         
     def setup_ui(self):
         self.setWindowTitle("Genie- Commit Review - Login")
-        self.setFixedSize(360, 350)
+        self.setFixedSize(450, 420)
         self.center_window()
         
         # Main layout
@@ -796,7 +796,7 @@ class RegisterWindow(QWidget):
         
     def setup_ui(self):
         self.setWindowTitle("Genie- Commit Review - Register")
-        self.setFixedSize(360, 520)
+        self.setFixedSize(500, 600)
         self.center_window()
         
         # Main layout
