@@ -610,6 +610,10 @@ class LoginWindow(QWidget):
                 with open(pre_commit_source, "r", encoding="utf-8") as file:
                     genie_hook_content = file.read()
                 
+                # Convert line endings for Windows compatibility
+                if platform.system().lower() == 'windows':
+                    genie_hook_content = genie_hook_content.replace('\r\n', '\n').replace('\r', '\n')
+                
                 # Add our signature
                 genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
                 
@@ -626,13 +630,15 @@ class LoginWindow(QWidget):
                     if genie_signature not in existing_content:
                         # Create a chained hook that calls both
                         clean_genie_content = genie_hook_content.replace(genie_signature + '\n', '')
+                        # Use proper path separators for cross-platform compatibility
+                        backup_path = os.path.join(hooks_dir, ".genie_backup", "pre-commit.original").replace("\\", "/")
                         chained_content = f"""#!/bin/bash
 {genie_signature}
 # This hook chains multiple Git hook applications
 
 # Call original hook first (if it exists and is not from Genie)
-if [ -f "{hooks_dir}/.genie_backup/pre-commit.original" ]; then
-    bash "{hooks_dir}/.genie_backup/pre-commit.original" "$@"
+if [ -f "{backup_path}" ]; then
+    bash "{backup_path}" "$@"
     original_exit_code=$?
     if [ $original_exit_code -ne 0 ]; then
         exit $original_exit_code
@@ -644,8 +650,8 @@ fi
 """
                         genie_hook_content = chained_content
                 
-                # Write the hook
-                with open(pre_commit_path, "w", encoding="utf-8") as f:
+                # Write the hook with proper line endings
+                with open(pre_commit_path, "w", encoding="utf-8", newline='\n') as f:
                     f.write(genie_hook_content)
                 
                 # Set executable permissions
@@ -664,6 +670,10 @@ fi
                 with open(post_commit_source, "r", encoding="utf-8") as file:
                     genie_hook_content = file.read()
                 
+                # Convert line endings for Windows compatibility
+                if platform.system().lower() == 'windows':
+                    genie_hook_content = genie_hook_content.replace('\r\n', '\n').replace('\r', '\n')
+                
                 # Add our signature
                 genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
                 
@@ -680,13 +690,15 @@ fi
                     if genie_signature not in existing_content:
                         # Create a chained hook that calls both
                         clean_genie_content = genie_hook_content.replace(genie_signature + '\n', '')
+                        # Use proper path separators for cross-platform compatibility
+                        backup_path = os.path.join(hooks_dir, ".genie_backup", "post-commit.original").replace("\\", "/")
                         chained_content = f"""#!/bin/bash
 {genie_signature}
 # This hook chains multiple Git hook applications
 
 # Call original hook first (if it exists and is not from Genie)
-if [ -f "{hooks_dir}/.genie_backup/post-commit.original" ]; then
-    bash "{hooks_dir}/.genie_backup/post-commit.original" "$@"
+if [ -f "{backup_path}" ]; then
+    bash "{backup_path}" "$@"
 fi
 
 # Call Genie hook
@@ -694,8 +706,8 @@ fi
 """
                         genie_hook_content = chained_content
                 
-                # Write the hook
-                with open(post_commit_path, "w", encoding="utf-8") as f:
+                # Write the hook with proper line endings
+                with open(post_commit_path, "w", encoding="utf-8", newline='\n') as f:
                     f.write(genie_hook_content)
                 
                 # Set executable permissions
