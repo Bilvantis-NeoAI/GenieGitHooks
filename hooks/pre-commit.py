@@ -225,9 +225,42 @@ def send_for_review(diff_content, language, repo_name, branch_name, api_url, jwt
         print(f"Error sending for review: {e}")
         return None
 
+def get_api_url():
+    """Get API URL from configuration file"""
+    try:
+        if platform.system() == "Windows":
+            config_file = os.path.join(os.path.expanduser("~"), ".genie", "config")
+        else:
+            config_file = os.path.expanduser("~/.genie/config")
+        
+        if os.path.exists(config_file):
+            with open(config_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        
+        # Fallback: try to read from environment variable (for backward compatibility)
+        env_api = os.environ.get('GENIE_API_URL') or os.environ.get('BASE_API')
+        if env_api:
+            return env_api
+            
+        return None
+        
+    except Exception as e:
+        print(f"Error reading API configuration: {e}")
+        return None
+
 def main():
     """Main pre-commit hook logic"""
     print("pre-commit")
+    
+    # Get API URL from configuration file
+    api_url = get_api_url()
+    if not api_url:
+        print("ERROR: API URL not configured.")
+        print("Please run the Genie GitHooks app to set up your backend URL.")
+        print("The app will create a configuration file with your API settings.")
+        return 1
     
     # Check Git configuration
     try:
@@ -281,11 +314,7 @@ def main():
         show_message_box("ERROR: Authentication token not found. Please run the Genie GitHooks app to login again.")
         return 1
     
-    # Get API URL from environment or default
-    api_url = os.environ.get('BASE_API', '${BASE_API}')
-    if api_url == '${BASE_API}':
-        print("ERROR: BASE_API not configured")
-        return 1
+    # API URL is already set from command line argument above
     
     # Send for review
     response = send_for_review(diff_content, language, repo_name, branch_name, api_url, jwt_token)

@@ -16,5 +16,5 @@ fi
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# Execute the Python post-commit script
+# Execute the Python post-commit script  
 exec "$python_cmd" "$SCRIPT_DIR/post-commit.py" "$@" 

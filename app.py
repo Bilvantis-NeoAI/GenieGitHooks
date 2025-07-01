@@ -347,6 +347,36 @@ class LoginWindow(QWidget):
         except Exception as e:
             logging.error(f"Failed to store JWT token: {e}")
             # Don't show error to user as this is not critical for hook installation
+    
+    def store_api_config(self, api_url):
+        """Store API URL in configuration file for hooks to use"""
+        try:
+            # Define Genie config path (platform-appropriate)
+            if platform.system() == "Windows":
+                genie_config_path = os.path.join(os.path.expanduser("~"), ".genie")
+            else:
+                genie_config_path = os.path.expanduser("~/.genie")
+            
+            # Create the .genie directory if it doesn't exist
+            os.makedirs(genie_config_path, exist_ok=True)
+            
+            # Store API URL in a configuration file
+            config_file = os.path.join(genie_config_path, "config")
+            with open(config_file, "w", encoding="utf-8") as f:
+                f.write(api_url)
+            
+            # Set file permissions to be readable only by the user (Unix-like systems)
+            try:
+                os.chmod(config_file, 0o600)
+            except OSError:
+                # Windows might not support chmod, but the file will still work
+                pass
+                
+            logging.info(f"API URL stored at: {config_file}")
+            
+        except Exception as e:
+            logging.error(f"Failed to store API configuration: {e}")
+            # Don't show error to user as this is not critical
         
     def handle_login(self):
         username = self.email.text().strip()
@@ -401,6 +431,9 @@ class LoginWindow(QWidget):
             
             # Store JWT token for hooks to use
             self.store_jwt_token(jwt_token)
+            
+            # Store API URL for hooks to use
+            self.store_api_config(self.backend_url)
             
             self.loading_widget.set_status("Login successful! Setting up hooks...")
             
@@ -620,8 +653,7 @@ class LoginWindow(QWidget):
                 if platform.system().lower() == 'windows':
                     wrapper_content = wrapper_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Replace placeholders in wrapper
-                wrapper_content = wrapper_content.replace("${BASE_API}", self.backend_url)
+                # No need to replace placeholders - hooks read from config file
                 
                 # Install the Python script
                 with open(pre_commit_py_source, "r", encoding="utf-8") as file:
@@ -631,8 +663,7 @@ class LoginWindow(QWidget):
                 if platform.system().lower() == 'windows':
                     python_content = python_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Replace placeholders in Python script
-                python_content = python_content.replace("${BASE_API}", self.backend_url)
+                # No need to replace placeholders - hooks read from config file
                 
                 # For the wrapper, we'll use the existing chaining logic but simplified
                 genie_hook_content = wrapper_content
@@ -697,8 +728,7 @@ fi
                 if platform.system().lower() == 'windows':
                     wrapper_content = wrapper_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Replace placeholders in wrapper
-                wrapper_content = wrapper_content.replace("${BASE_API}", self.backend_url)
+                # No need to replace placeholders - hooks read from config file
                 
                 # Install the Python script
                 with open(post_commit_py_source, "r", encoding="utf-8") as file:
@@ -708,8 +738,7 @@ fi
                 if platform.system().lower() == 'windows':
                     python_content = python_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Replace placeholders in Python script
-                python_content = python_content.replace("${BASE_API}", self.backend_url)
+                # No need to replace placeholders - hooks read from config file
                 
                 # For the wrapper, we'll use the existing chaining logic but simplified
                 genie_hook_content = wrapper_content

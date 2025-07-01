@@ -16,8 +16,5 @@ fi
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# Set environment variables for the Python script
-export BASE_API="${BASE_API}"
-
 # Execute the Python pre-commit script
 exec "$python_cmd" "$SCRIPT_DIR/pre-commit.py" "$@" 
