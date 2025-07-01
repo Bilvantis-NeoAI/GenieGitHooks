@@ -623,7 +623,7 @@ class LoginWindow(QWidget):
                 
             # Use platform-appropriate hooks for maximum compatibility
             if platform.system().lower() == 'windows':
-                # Use .cmd wrappers for Windows GUI tools (VSCode, GitHub Desktop)
+                # Use Windows batch files as the actual hook files
                 pre_commit_source = os.path.join(hooks_base, "pre-commit.cmd")
                 post_commit_source = os.path.join(hooks_base, "post-commit.cmd")
             else:
@@ -795,7 +795,7 @@ fi
             
             platform_msg = ""
             if platform.system().lower() == 'windows':
-                platform_msg = "✅ Windows GUI tools support (VSCode, GitHub Desktop)\n✅ Windows batch wrappers for maximum compatibility\n"
+                platform_msg = "✅ Windows batch files as Git hooks (no exec format errors)\n✅ Full GUI tools support (VSCode, GitHub Desktop)\n✅ No bash dependencies on Windows\n"
             else:
                 platform_msg = "✅ Unix/Linux bash wrappers\n"
             

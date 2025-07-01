@@ -1,6 +1,6 @@
 @echo off
-REM Genie GitHooks - Pre-commit Hook (Windows Batch Wrapper)
-REM This allows Windows GUI tools (VSCode, GitHub Desktop) to execute the hook
+REM Genie GitHooks - Pre-commit Hook (Windows)
+REM This file will be installed as "pre-commit" (no extension) on Windows
 
 REM Find Python executable
 where python.exe >nul 2>&1
