@@ -10,9 +10,10 @@ import json
 import subprocess
 import tempfile
 import platform
-import requests
 import webbrowser
-from pathlib import Path
+import urllib.request
+import urllib.parse
+import urllib.error
 
 def show_message_box(message):
     """Display a message box using tkinter"""
@@ -201,25 +202,39 @@ def send_for_review(diff_content, language, repo_name, branch_name, api_url, jwt
             "html": True
         }
         
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {jwt_token}"
-        }
+        # Convert payload to JSON bytes
+        json_data = json.dumps(payload).encode('utf-8')
+        
+        # Create request
+        url = f"{api_url}/review/review"
+        req = urllib.request.Request(url, data=json_data, method='POST')
+        
+        # Set headers
+        req.add_header('Content-Type', 'application/json')
+        req.add_header('Authorization', f'Bearer {jwt_token}')
         
         # print("DEBUG: Sending request to API...")
-        # print(f"DEBUG: Payload size: {len(json.dumps(payload))} characters")
+        # print(f"DEBUG: Payload size: {len(json_data)} bytes")
         
-        response = requests.post(f"{api_url}/review/review", 
-                               json=payload, headers=headers, timeout=30)
-        
-        if response.status_code == 200:
-            return response.text
-        else:
-            print(f"API Error: {response.status_code} - {response.text}")
-            return None
+        # Send request
+        with urllib.request.urlopen(req, timeout=30) as response:
+            if response.getcode() == 200:
+                return response.read().decode('utf-8')
+            else:
+                print(f"API Error: {response.getcode()}")
+                return None
             
-    except requests.RequestException as e:
-        print(f"Network error: {e}")
+    except urllib.error.HTTPError as e:
+        print(f"HTTP Error: {e.code} - {e.reason}")
+        if hasattr(e, 'read'):
+            try:
+                error_body = e.read().decode('utf-8')
+                print(f"Error details: {error_body}")
+            except:
+                pass
+        return None
+    except urllib.error.URLError as e:
+        print(f"Network error: {e.reason}")
         return None
     except Exception as e:
         print(f"Error sending for review: {e}")
