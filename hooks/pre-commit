@@ -29,9 +29,9 @@ EOF
 # Function to extract and open HTML from API response
 open_html_in_browser() {
     local api_response="$1"
-    # Use cross-platform mktemp (macOS doesn't support --suffix)
-    local temp_file=$(mktemp).html
-    local temp_response_file=$(mktemp)
+    # Use cross-platform temp file creation
+    local temp_file="/tmp/genie_html_$$_$(date +%s).html"
+    local temp_response_file="/tmp/genie_response_$$_$(date +%s)"
     
     # Write response to a temp file to avoid bash multiline string issues
     printf '%s' "$api_response" > "$temp_response_file"
@@ -263,8 +263,9 @@ echo ""
 echo "--- End diff preview ---"
 
 # Create JSON payload using Python to handle proper escaping
-json_file=$(mktemp)
-diff_file=$(mktemp)
+# Use more robust temp file creation for cross-platform compatibility
+json_file="/tmp/genie_git_hook_$$_json"
+diff_file="/tmp/genie_git_hook_$$_diff"
 
 # Write diff content to temporary file (avoids printf issues with special characters)
 echo "$diff_content" > "$diff_file"

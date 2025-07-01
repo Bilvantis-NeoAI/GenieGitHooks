@@ -614,11 +614,17 @@ class LoginWindow(QWidget):
                 if platform.system().lower() == 'windows':
                     genie_hook_content = genie_hook_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Add our signature
-                genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
-                
-                # Replace placeholders
+                # Replace placeholders first
                 genie_hook_content = genie_hook_content.replace("${BASE_API}", self.backend_url).replace("${userId}", self.user_id)
+                
+                # Add our signature AFTER the shebang line to preserve executability
+                lines = genie_hook_content.split('\n')
+                if lines[0].startswith('#!'):
+                    # Insert signature after shebang
+                    genie_hook_content = lines[0] + '\n' + genie_signature + '\n' + '\n'.join(lines[1:])
+                else:
+                    # No shebang, add signature at the beginning
+                    genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
                 
                 # Check if there's an existing hook
                 existing_content = ""
@@ -674,11 +680,17 @@ fi
                 if platform.system().lower() == 'windows':
                     genie_hook_content = genie_hook_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Add our signature
-                genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
-                
-                # Replace placeholders
+                # Replace placeholders first
                 genie_hook_content = genie_hook_content.replace("${BASE_API}", self.backend_url).replace("${userId}", self.user_id)
+                
+                # Add our signature AFTER the shebang line to preserve executability
+                lines = genie_hook_content.split('\n')
+                if lines[0].startswith('#!'):
+                    # Insert signature after shebang
+                    genie_hook_content = lines[0] + '\n' + genie_signature + '\n' + '\n'.join(lines[1:])
+                else:
+                    # No shebang, add signature at the beginning
+                    genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
                 
                 # Check if there's an existing hook
                 existing_content = ""
