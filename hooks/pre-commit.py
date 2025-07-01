@@ -192,53 +192,70 @@ def get_jwt_token():
     return None
 
 def send_for_review(diff_content, language, repo_name, branch_name, api_url, jwt_token):
-    """Send code changes for review"""
-    try:
-        payload = {
-            "code": diff_content,
-            "language": language,
-            "project_name": repo_name,
-            "branch_name": branch_name,
-            "html": True
-        }
-        
-        # Convert payload to JSON bytes
-        json_data = json.dumps(payload).encode('utf-8')
-        
-        # Create request
-        url = f"{api_url}/review/review"
-        req = urllib.request.Request(url, data=json_data, method='POST')
-        
-        # Set headers
-        req.add_header('Content-Type', 'application/json')
-        req.add_header('Authorization', f'Bearer {jwt_token}')
-        
-        # print("DEBUG: Sending request to API...")
-        # print(f"DEBUG: Payload size: {len(json_data)} bytes")
-        
-        # Send request
-        with urllib.request.urlopen(req, timeout=30) as response:
-            if response.getcode() == 200:
-                return response.read().decode('utf-8')
-            else:
-                print(f"API Error: {response.getcode()}")
-                return None
+    """Send code changes for review with retry logic"""
+    import time
+    
+    payload = {
+        "code": diff_content,
+        "language": language,
+        "project_name": repo_name,
+        "branch_name": branch_name,
+        "html": True
+    }
+    
+    # Convert payload to JSON bytes
+    json_data = json.dumps(payload).encode('utf-8')
+    
+    # Create request
+    url = f"{api_url}/review/review"
+    
+    print("DEBUG: Sending request to API...")
+    print(f"DEBUG: Payload size: {len(json_data)} bytes")
+    
+    # Retry logic: try 3 times with increasing delays
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=json_data, method='POST')
             
-    except urllib.error.HTTPError as e:
-        print(f"HTTP Error: {e.code} - {e.reason}")
-        if hasattr(e, 'read'):
-            try:
-                error_body = e.read().decode('utf-8')
-                print(f"Error details: {error_body}")
-            except:
-                pass
-        return None
-    except urllib.error.URLError as e:
-        print(f"Network error: {e.reason}")
-        return None
-    except Exception as e:
-        print(f"Error sending for review: {e}")
-        return None
+            # Set headers
+            req.add_header('Content-Type', 'application/json')
+            req.add_header('Authorization', f'Bearer {jwt_token}')
+            
+            # Send request with longer timeout
+            with urllib.request.urlopen(req, timeout=90) as response:
+                if response.getcode() == 200:
+                    return response.read().decode('utf-8')
+                else:
+                    print(f"API Error: {response.getcode()}")
+                    return None
+                
+        except urllib.error.HTTPError as e:
+            print(f"HTTP Error (attempt {attempt + 1}): {e.code} - {e.reason}")
+            if hasattr(e, 'read'):
+                try:
+                    error_body = e.read().decode('utf-8')
+                    print(f"Error details: {error_body}")
+                except:
+                    pass
+            
+            # Don't retry on authentication errors (4xx)
+            if 400 <= e.code < 500:
+                return None
+                
+        except (urllib.error.URLError, OSError) as e:
+            print(f"Network error (attempt {attempt + 1}): {e}")
+            
+        except Exception as e:
+            print(f"Error sending for review (attempt {attempt + 1}): {e}")
+        
+        # Wait before retrying (exponential backoff)
+        if attempt < 2:  # Don't wait after the last attempt
+            wait_time = (attempt + 1) * 2  # 2, 4 seconds
+            print(f"Retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
+    
+    print("Failed to send request after 3 attempts")
+    return None
 
 def get_api_url():
     """Get API URL from configuration file"""

@@ -621,10 +621,17 @@ class LoginWindow(QWidget):
                 # Running in development
                 hooks_base = "hooks"
                 
-            # Use the Python-based hooks for better cross-platform compatibility
-            pre_commit_source = os.path.join(hooks_base, "pre-commit")
+            # Use platform-appropriate hooks for maximum compatibility
+            if platform.system().lower() == 'windows':
+                # Use .cmd wrappers for Windows GUI tools (VSCode, GitHub Desktop)
+                pre_commit_source = os.path.join(hooks_base, "pre-commit.cmd")
+                post_commit_source = os.path.join(hooks_base, "post-commit.cmd")
+            else:
+                # Use bash wrappers for Unix-like systems
+                pre_commit_source = os.path.join(hooks_base, "pre-commit")
+                post_commit_source = os.path.join(hooks_base, "post-commit")
+            
             pre_commit_py_source = os.path.join(hooks_base, "pre-commit.py")
-            post_commit_source = os.path.join(hooks_base, "post-commit")
             post_commit_py_source = os.path.join(hooks_base, "post-commit.py")
             
             logging.info(f"Looking for hooks in: {hooks_base}")
@@ -786,7 +793,13 @@ fi
                     
                 logging.info("Post-commit hook installed safely!")
             
-            QMessageBox.information(self, "Success", "Genie Git hooks installed successfully!\n\nCode review will now happen before each commit.\n\nExisting hooks from other applications have been preserved.")
+            platform_msg = ""
+            if platform.system().lower() == 'windows':
+                platform_msg = "✅ Windows GUI tools support (VSCode, GitHub Desktop)\n✅ Windows batch wrappers for maximum compatibility\n"
+            else:
+                platform_msg = "✅ Unix/Linux bash wrappers\n"
+            
+            QMessageBox.information(self, "Success", f"Genie Git hooks installed successfully!\n\n✅ Python-based implementation with standard library only\n{platform_msg}✅ Configuration file-based API URL management\n✅ Retry logic for network reliability\n✅ No external dependencies required\n\nCode review will now happen before each commit.\n\nExisting hooks from other applications have been preserved.")
             logging.info("Genie Git hooks installation completed successfully!")
             
             # Close after success
