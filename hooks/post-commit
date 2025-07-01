@@ -1,39 +1,20 @@
 #!/bin/bash
-# Check Python availability
+# GENIE_GITHOOKS_MARKER
+# Genie GitHooks - Post-commit Hook Wrapper
+# This wrapper calls the Python implementation for cross-platform compatibility
+
+# Find Python executable
 if command -v python3 > /dev/null 2>&1; then
-   python_cmd="python3"
+    python_cmd="python3"
 elif command -v python > /dev/null 2>&1; then
-   python_cmd="python"
+    python_cmd="python"
 else
-   echo "WARNING: Python3 is not installed."
-   exit 1
+    echo "WARNING: Python 3 not found. Post-commit hook will be skipped."
+    exit 0
 fi
 
-# Function to display a Tkinter message box
-show_message_box() {
-    local message="$1"
-    $python_cmd - <<EOF
-import tkinter as tk
-from tkinter import messagebox
-root = tk.Tk()
-root.withdraw()
-messagebox.showinfo("Genie GitHooks", '$message')
-EOF
-}
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# Get commit details
-commit_id=$(git rev-parse HEAD)
-commit_message=$(git log --format=%B -n 1 "$commit_id")
-branch=$(git rev-parse --abbrev-ref HEAD)
-repo_name=$(git config --get remote.origin.url | sed 's#.*/##;s/.git//' 2>/dev/null || basename "$(pwd)")
-
-echo "Commit completed successfully!"
-echo "Commit ID: $commit_id"
-echo "Branch: $branch"
-echo "Repository: $repo_name"
-echo "Message: $commit_message"
-
-# Optional: Show completion message
-# show_message_box "Commit completed successfully in branch: $branch"
-
-exit 0  
+# Execute the Python post-commit script
+exec "$python_cmd" "$SCRIPT_DIR/post-commit.py" "$@" 

@@ -588,43 +588,54 @@ class LoginWindow(QWidget):
                 # Running in development
                 hooks_base = "hooks"
                 
+            # Use the Python-based hooks for better cross-platform compatibility
             pre_commit_source = os.path.join(hooks_base, "pre-commit")
+            pre_commit_py_source = os.path.join(hooks_base, "pre-commit.py")
             post_commit_source = os.path.join(hooks_base, "post-commit")
+            post_commit_py_source = os.path.join(hooks_base, "post-commit.py")
             
             logging.info(f"Looking for hooks in: {hooks_base}")
-            logging.info(f"Pre-commit source exists: {os.path.exists(pre_commit_source)}")
-            logging.info(f"Post-commit source exists: {os.path.exists(post_commit_source)}")
+            logging.info(f"Pre-commit wrapper exists: {os.path.exists(pre_commit_source)}")
+            logging.info(f"Pre-commit Python script exists: {os.path.exists(pre_commit_py_source)}")
+            logging.info(f"Post-commit wrapper exists: {os.path.exists(post_commit_source)}")
+            logging.info(f"Post-commit Python script exists: {os.path.exists(post_commit_py_source)}")
             
             # Check if hook files exist before installation
-            if not os.path.exists(pre_commit_source) and not os.path.exists(post_commit_source):
-                error_msg = f"Hook source files not found in {hooks_base}. Installation cannot proceed."
+            if not (os.path.exists(pre_commit_source) and os.path.exists(pre_commit_py_source)):
+                error_msg = f"Pre-commit hook files not found in {hooks_base}. Installation cannot proceed."
                 logging.error(error_msg)
                 QMessageBox.critical(self, "Error", error_msg)
                 return
             
-            # Install pre-commit hook
-            if os.path.exists(pre_commit_source):
+            # Install pre-commit hook (wrapper + Python script)
+            if os.path.exists(pre_commit_source) and os.path.exists(pre_commit_py_source):
                 pre_commit_path = os.path.join(hooks_dir, "pre-commit")
+                pre_commit_py_path = os.path.join(hooks_dir, "pre-commit.py")
                 
-                # Read our hook content
+                # Install the wrapper script
                 with open(pre_commit_source, "r", encoding="utf-8") as file:
-                    genie_hook_content = file.read()
+                    wrapper_content = file.read()
                 
                 # Convert line endings for Windows compatibility
                 if platform.system().lower() == 'windows':
-                    genie_hook_content = genie_hook_content.replace('\r\n', '\n').replace('\r', '\n')
+                    wrapper_content = wrapper_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Replace placeholders first
-                genie_hook_content = genie_hook_content.replace("${BASE_API}", self.backend_url).replace("${userId}", self.user_id)
+                # Replace placeholders in wrapper
+                wrapper_content = wrapper_content.replace("${BASE_API}", self.backend_url)
                 
-                # Add our signature AFTER the shebang line to preserve executability
-                lines = genie_hook_content.split('\n')
-                if lines[0].startswith('#!'):
-                    # Insert signature after shebang
-                    genie_hook_content = lines[0] + '\n' + genie_signature + '\n' + '\n'.join(lines[1:])
-                else:
-                    # No shebang, add signature at the beginning
-                    genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
+                # Install the Python script
+                with open(pre_commit_py_source, "r", encoding="utf-8") as file:
+                    python_content = file.read()
+                
+                # Convert line endings for Windows compatibility
+                if platform.system().lower() == 'windows':
+                    python_content = python_content.replace('\r\n', '\n').replace('\r', '\n')
+                
+                # Replace placeholders in Python script
+                python_content = python_content.replace("${BASE_API}", self.backend_url)
+                
+                # For the wrapper, we'll use the existing chaining logic but simplified
+                genie_hook_content = wrapper_content
                 
                 # Check if there's an existing hook
                 existing_content = ""
@@ -656,41 +667,52 @@ fi
 """
                         genie_hook_content = chained_content
                 
-                # Write the hook with proper line endings
+                # Write the wrapper hook with proper line endings
                 with open(pre_commit_path, "w", encoding="utf-8", newline='\n') as f:
                     f.write(genie_hook_content)
+                
+                # Write the Python script with proper line endings
+                with open(pre_commit_py_path, "w", encoding="utf-8", newline='\n') as f:
+                    f.write(python_content)
                 
                 # Set executable permissions
                 try:
                     os.chmod(pre_commit_path, 0o755)
+                    os.chmod(pre_commit_py_path, 0o755)
                 except OSError:
                     pass
                     
-                logging.info("Pre-commit hook installed safely!")
+                logging.info("Pre-commit hook (wrapper + Python script) installed safely!")
             
-            # Install post-commit hook (similar logic)
-            if os.path.exists(post_commit_source):
+            # Install post-commit hook (wrapper + Python script)
+            if os.path.exists(post_commit_source) and os.path.exists(post_commit_py_source):
                 post_commit_path = os.path.join(hooks_dir, "post-commit")
+                post_commit_py_path = os.path.join(hooks_dir, "post-commit.py")
                 
-                # Read our hook content
+                # Install the wrapper script
                 with open(post_commit_source, "r", encoding="utf-8") as file:
-                    genie_hook_content = file.read()
+                    wrapper_content = file.read()
                 
                 # Convert line endings for Windows compatibility
                 if platform.system().lower() == 'windows':
-                    genie_hook_content = genie_hook_content.replace('\r\n', '\n').replace('\r', '\n')
+                    wrapper_content = wrapper_content.replace('\r\n', '\n').replace('\r', '\n')
                 
-                # Replace placeholders first
-                genie_hook_content = genie_hook_content.replace("${BASE_API}", self.backend_url).replace("${userId}", self.user_id)
+                # Replace placeholders in wrapper
+                wrapper_content = wrapper_content.replace("${BASE_API}", self.backend_url)
                 
-                # Add our signature AFTER the shebang line to preserve executability
-                lines = genie_hook_content.split('\n')
-                if lines[0].startswith('#!'):
-                    # Insert signature after shebang
-                    genie_hook_content = lines[0] + '\n' + genie_signature + '\n' + '\n'.join(lines[1:])
-                else:
-                    # No shebang, add signature at the beginning
-                    genie_hook_content = f"{genie_signature}\n{genie_hook_content}"
+                # Install the Python script
+                with open(post_commit_py_source, "r", encoding="utf-8") as file:
+                    python_content = file.read()
+                
+                # Convert line endings for Windows compatibility
+                if platform.system().lower() == 'windows':
+                    python_content = python_content.replace('\r\n', '\n').replace('\r', '\n')
+                
+                # Replace placeholders in Python script
+                python_content = python_content.replace("${BASE_API}", self.backend_url)
+                
+                # For the wrapper, we'll use the existing chaining logic but simplified
+                genie_hook_content = wrapper_content
                 
                 # Check if there's an existing hook
                 existing_content = ""
@@ -718,13 +740,18 @@ fi
 """
                         genie_hook_content = chained_content
                 
-                # Write the hook with proper line endings
+                # Write the wrapper hook with proper line endings
                 with open(post_commit_path, "w", encoding="utf-8", newline='\n') as f:
                     f.write(genie_hook_content)
+                
+                # Write the Python script with proper line endings
+                with open(post_commit_py_path, "w", encoding="utf-8", newline='\n') as f:
+                    f.write(python_content)
                 
                 # Set executable permissions
                 try:
                     os.chmod(post_commit_path, 0o755)
+                    os.chmod(post_commit_py_path, 0o755)
                 except OSError:
                     pass
                     
