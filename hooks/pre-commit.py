@@ -206,8 +206,8 @@ def send_for_review(diff_content, language, repo_name, branch_name, api_url, jwt
             "Authorization": f"Bearer {jwt_token}"
         }
         
-        print("DEBUG: Sending request to API...")
-        print(f"DEBUG: Payload size: {len(json.dumps(payload))} characters")
+        # print("DEBUG: Sending request to API...")
+        # print(f"DEBUG: Payload size: {len(json.dumps(payload))} characters")
         
         response = requests.post(f"{api_url}/review/review", 
                                json=payload, headers=headers, timeout=30)
@@ -298,12 +298,12 @@ def main():
     language = detect_language(staged_files)
     
     # Debug output
-    print(f"DEBUG: Staged files: {' '.join(staged_files)}")
-    print(f"DEBUG: Language detected: {language}")
-    print(f"DEBUG: Repo name: {repo_name}")
-    print(f"DEBUG: Branch name: {branch_name}")
-    print(f"DEBUG: Diff content length: {len(diff_content)}")
-    print("DEBUG: First 200 chars of diff:")
+    # print(f"DEBUG: Staged files: {' '.join(staged_files)}")
+    # print(f"DEBUG: Language detected: {language}")
+    # print(f"DEBUG: Repo name: {repo_name}")
+    # print(f"DEBUG: Branch name: {branch_name}")
+    # print(f"DEBUG: Diff content length: {len(diff_content)}")
+    # print("DEBUG: First 200 chars of diff:")
     print(diff_content[:200])
     print("")
     print("--- End diff preview ---")

@@ -62,11 +62,11 @@ def main():
     commit_id, commit_message, branch, repo_name = get_commit_details()
     
     # Display commit information
-    print("Commit completed successfully!")
-    print(f"Commit ID: {commit_id}")
-    print(f"Branch: {branch}")
-    print(f"Repository: {repo_name}")
-    print(f"Message: {commit_message}")
+    # print("Commit completed successfully!")
+    # print(f"Commit ID: {commit_id}")
+    # print(f"Branch: {branch}")
+    # print(f"Repository: {repo_name}")
+    # print(f"Message: {commit_message}")
     
     # Optional: Show completion message
     # show_message_box(f"Commit completed successfully in branch: {branch}")
